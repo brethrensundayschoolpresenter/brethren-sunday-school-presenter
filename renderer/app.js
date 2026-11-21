@@ -487,10 +487,13 @@ async function showNews() {
   } catch (e) { return; }
   if (!HAD_SET) return;   // first install: nothing to announce
   const items = [];
-  if (seenV !== v && WHATSNEW[v]) items.push(...WHATSNEW[v]);
-  if (ci && ci.version > seenD && (ci.notes || []).length) items.push(...ci.notes);
+  // everything new since the version this copy showed last (someone may jump several versions at once)
+  const vnum = s => String(s || '0').split('.').map(Number).reduce((a, x) => a * 1000 + (x || 0), 0);
+  if (seenV !== v) Object.keys(WHATSNEW).filter(k => vnum(k) <= vnum(v) && (!seenV || vnum(k) > vnum(seenV))).sort((a, b) => vnum(b) - vnum(a)).forEach(k => items.push(...WHATSNEW[k]));
+  const dataNews = ci && ci.version > seenD && (ci.notes || []).length;
+  if (dataNews) items.push(...ci.notes);
   if (!items.length) return;
-  $('newsVer').textContent = 'النسخة ' + v + (ci && ci.version ? ' · تحديث الترانيم ' + ci.version : '');
+  $('newsVer').textContent = 'النسخة ' + v + (dataNews ? ' · تحديث الترانيم ' + ci.version : '');
   $('newsList').innerHTML = items.map(x => '<li>' + x + '</li>').join('');
   $('news').classList.add('open');
 }
