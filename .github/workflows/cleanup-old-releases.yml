@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  actions: write
 jobs:
   clean:
     runs-on: ubuntu-latest
@@ -16,3 +17,11 @@ jobs:
             gh release delete "v$v" --yes --cleanup-tag || true
           done
           gh release list
+      - name: Delete old workflow runs (they show who started them)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          for id in $(gh run list --limit 200 --json databaseId,status -q '.[] | select(.status=="completed") | .databaseId'); do
+            gh run delete "$id" || true
+          done
