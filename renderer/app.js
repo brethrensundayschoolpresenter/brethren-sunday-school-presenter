@@ -457,21 +457,41 @@ if (APP && window.bp.on) window.bp.on('update', u => {
 const SUGGEST_URL = 'https://m.me/61578584879222';
 function suggest() { if (APP && window.bp.openLink) window.bp.openLink(SUGGEST_URL); else window.open(SUGGEST_URL, '_blank'); }
 $('sugBtn').onclick = suggest;
+if (APP && window.bp.on) window.bp.on('content', c => {
+  const b = $('dataBtn'); b.style.display = ''; b.textContent = '✨ ترانيم جديدة — اعرضها';
+  b.title = (c.notes || []).map(x => x.replace(/<[^>]+>/g, '')).join('\n');
+  b.onclick = () => { if (window.bp.reloadFresh) window.bp.reloadFresh(); else location.reload(); };
+  toast('وصل تحديث جديد للترانيم ✨');
+});
 // "what's new" after an update: shown once per new version, never on a first install
 const WHATSNEW = {
+  '1.0.7': [
+    'تحديثات الترانيم بقت بتوصل لوحدها وانت فاتح البرنامج على النت — من غير تسطيب ومن غير ما البرنامج يقفل.',
+    'لما يوصل تحديث للترانيم هيظهر فوق زرار <b>✨ ترانيم جديدة</b> — دوس عليه وهتلاقيها في القايمة على طول.',
+    'تحديث البرنامج نفسه بقى بيتسطّب في الخلفية من غير شاشة تسطيب.'
+  ],
   '1.0.5': [
     'زرار جديد فوق: <b>ابعت اقتراح</b> — لو لقيت غلطة في ترنيمة أو عندك فكرة، ابعتها على طول لصفحة مدرسة الأحد – كنيسة الإخوة راغب على فيسبوك.',
     'الشاشة دي هتظهرلك بعد كل تحديث عشان تعرف الجديد في البرنامج.'
   ]
 };
 async function showNews() {
-  let v = ''; try { v = APP && window.bp.version ? await window.bp.version() : ''; } catch (e) {}
+  let v = '', ci = null;
+  try { v = APP && window.bp.version ? await window.bp.version() : ''; } catch (e) {}
+  try { ci = APP && window.bp.contentInfo ? await window.bp.contentInfo() : null; } catch (e) {}
   if (!v) return;
-  let seen = null, old = false;
-  try { seen = localStorage.getItem('ss_seen_ver'); old = HAD_SET; localStorage.setItem('ss_seen_ver', v); } catch (e) { return; }
-  if (seen === v || (!seen && !old) || !WHATSNEW[v]) return;
-  $('newsVer').textContent = 'النسخة ' + v;
-  $('newsList').innerHTML = WHATSNEW[v].map(x => '<li>' + x + '</li>').join('');
+  let seenV = null, seenD = 0;
+  try {
+    seenV = localStorage.getItem('ss_seen_ver'); seenD = +(localStorage.getItem('ss_seen_data') || 0);
+    localStorage.setItem('ss_seen_ver', v); if (ci) localStorage.setItem('ss_seen_data', String(ci.version));
+  } catch (e) { return; }
+  if (!HAD_SET) return;   // first install: nothing to announce
+  const items = [];
+  if (seenV !== v && WHATSNEW[v]) items.push(...WHATSNEW[v]);
+  if (ci && ci.version > seenD && (ci.notes || []).length) items.push(...ci.notes);
+  if (!items.length) return;
+  $('newsVer').textContent = 'النسخة ' + v + (ci && ci.version ? ' · تحديث الترانيم ' + ci.version : '');
+  $('newsList').innerHTML = items.map(x => '<li>' + x + '</li>').join('');
   $('news').classList.add('open');
 }
 $('newsOk').onclick = () => $('news').classList.remove('open');

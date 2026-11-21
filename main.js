@@ -3,6 +3,7 @@ const { app, BrowserWindow, protocol, net, ipcMain, screen, session, Menu, shell
 const path = require('path');
 const { pathToFileURL } = require('url');
 const fs = require('fs');
+const crypto = require('crypto');
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'bp', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 
@@ -18,29 +19,90 @@ function logLine(msg) {
   } catch (e) {}
 }
 
+// ---- hymn data updates without reinstalling (A) ----
+// renderer/data/content.json = {dataVersion, minApp, files:{name:sha256}, notes:[...]}. The app checks the same file on GitHub;
+// a newer dataVersion is downloaded (hash checked) into userData/content and used from the next window load.
+const CONTENT_RAW = process.env.SS_CONTENT_URL || 'https://raw.githubusercontent.com/brethrensundayschoolpresenter/brethren-sunday-school-presenter/main/renderer/data/';
+const CONTENT_FILES = ['hymns.js', 'topics.js', 'stories.js'];
+const CONTENT_DIR = () => path.join(app.getPath('userData'), 'content');
+function readJSON(f) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return null; } }
+function appAtLeast(min) {
+  if (!min) return true;
+  const a = app.getVersion().split('.').map(Number), m = String(min).split('.').map(Number);
+  for (let i = 0; i < 3; i++) if ((a[i] || 0) !== (m[i] || 0)) return (a[i] || 0) > (m[i] || 0);
+  return true;
+}
+function bundledContent() { return readJSON(path.join(RENDERER, 'data', 'content.json')) || { dataVersion: 0 }; }
+function downloadedContent() {
+  const c = readJSON(path.join(CONTENT_DIR(), 'content.json'));
+  return c && c.dataVersion > (bundledContent().dataVersion || 0) && appAtLeast(c.minApp) && CONTENT_FILES.every(f => fs.existsSync(path.join(CONTENT_DIR(), f))) ? c : null;
+}
+function activeContent() { return downloadedContent() || bundledContent(); }
+function resolveFile(pathname) {
+  const rel = decodeURIComponent(pathname);
+  const m = rel.match(/^\/data\/(hymns|topics|stories)\.js$/);
+  if (m && downloadedContent()) return path.join(CONTENT_DIR(), m[1] + '.js');
+  const file = path.normalize(path.join(RENDERER, rel));
+  return file.startsWith(RENDERER) ? file : null;
+}
+function getBuffer(url) {   // electron net.request works on Electron 22 and 33
+  return new Promise((resolve, reject) => {
+    const rq = net.request({ url, redirect: 'follow' });
+    rq.on('response', res => {
+      if (res.statusCode !== 200) { reject(new Error('HTTP ' + res.statusCode)); res.on('data', () => {}); return; }
+      const parts = []; res.on('data', d => parts.push(d)); res.on('end', () => resolve(Buffer.concat(parts))); res.on('error', reject);
+    });
+    rq.on('error', reject); rq.end();
+  });
+}
+let contentBusy = false;
+async function checkContent() {
+  if (contentBusy) return; contentBusy = true;
+  try {
+    const remote = JSON.parse((await getBuffer(CONTENT_RAW + 'content.json?t=' + Date.now())).toString('utf8'));
+    const cur = activeContent().dataVersion || 0;
+    if (!(remote.dataVersion > cur) || !appAtLeast(remote.minApp)) return;
+    const dir = CONTENT_DIR(), tmp = dir + '-new';
+    fs.rmSync(tmp, { recursive: true, force: true }); fs.mkdirSync(tmp, { recursive: true });
+    for (const f of CONTENT_FILES) {
+      const buf = await getBuffer(CONTENT_RAW + f + '?v=' + remote.dataVersion);
+      const h = crypto.createHash('sha256').update(buf).digest('hex');
+      if (!remote.files || remote.files[f] !== h) throw new Error('hash mismatch ' + f);
+      fs.writeFileSync(path.join(tmp, f), buf);
+    }
+    fs.writeFileSync(path.join(tmp, 'content.json'), JSON.stringify(remote));
+    fs.rmSync(dir, { recursive: true, force: true }); fs.renameSync(tmp, dir);
+    logLine('CONTENT updated to ' + remote.dataVersion);
+    if (control && !control.isDestroyed()) control.webContents.send('content', { version: remote.dataVersion, notes: remote.notes || [] });
+  } catch (e) { logLine('CONTENT ' + e.message); }
+  finally { contentBusy = false; }
+}
+ipcMain.on('reload-fresh', e => { try { e.sender.reloadIgnoringCache(); } catch (x) {} });
+ipcMain.handle('content-info', () => { const c = activeContent(); return { version: c.dataVersion || 0, notes: c.notes || [] }; });
+
 const LEGACY = parseInt(process.versions.electron, 10) < 25;   // Windows 7/8 build runs on Electron 22 (no protocol.handle)
 function serveLegacy() {
   const MIME = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.html': 'text/html', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.ttf': 'font/ttf', '.otf': 'font/otf', '.woff2': 'font/woff2', '.wasm': 'application/wasm' };
   protocol.registerFileProtocol('bp', (req, cb) => {
     const u = new URL(req.url);
-    const file = path.normalize(path.join(RENDERER, decodeURIComponent(u.pathname)));
-    if (!file.startsWith(RENDERER) || !fs.existsSync(file)) return cb({ error: -6 });
-    cb({ path: file, mimeType: MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp', 'Cross-Origin-Resource-Policy': 'same-origin' } });
+    const file = resolveFile(u.pathname);
+    if (!file || !fs.existsSync(file)) return cb({ error: -6 });
+    cb({ path: file, mimeType: MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp', 'Cross-Origin-Resource-Policy': 'same-origin', 'Cache-Control': 'no-cache' } });
   });
 }
 function serve() {
   if (LEGACY || !protocol.handle) return serveLegacy();
   protocol.handle('bp', async req => {
     const u = new URL(req.url);
-    const root = RENDERER;
-    const file = path.normalize(path.join(root, decodeURIComponent(u.pathname)));
-    if (!file.startsWith(root) || !fs.existsSync(file)) return new Response('not found', { status: 404 });
+    const file = resolveFile(u.pathname);
+    if (!file || !fs.existsSync(file)) return new Response('not found', { status: 404 });
     const r = await net.fetch(pathToFileURL(file).toString());
     const h = new Headers(r.headers);
     h.set('Content-Length', String(fs.statSync(file).size));
     h.set('Cross-Origin-Opener-Policy', 'same-origin');
     h.set('Cross-Origin-Embedder-Policy', 'require-corp');
     h.set('Cross-Origin-Resource-Policy', 'same-origin');
+    h.set('Cache-Control', 'no-cache');
     if (file.endsWith('.mjs') || file.endsWith('.js')) h.set('Content-Type', 'text/javascript');
     if (file.endsWith('.wasm')) h.set('Content-Type', 'application/wasm');
     return new Response(r.body, { status: 200, headers: h });
@@ -123,7 +185,7 @@ function startUpdates() {
 // links the app may open in the browser: only the church's Facebook page / Messenger
 ipcMain.on('open-link', (e, u) => { if (/^https:\/\/(m\.me|www\.facebook\.com|www\.messenger\.com)\//.test(String(u))) shell.openExternal(u); });
 ipcMain.handle('app-version', () => app.getVersion());
-ipcMain.on('update-now', () => { try { require('electron-updater').autoUpdater.quitAndInstall(false, true); } catch (e) {} });
+ipcMain.on('update-now', () => { try { require('electron-updater').autoUpdater.quitAndInstall(true, true); } catch (e) {} });
 
 app.whenReady().then(() => {
   serve();
@@ -138,6 +200,7 @@ app.whenReady().then(() => {
   } else Menu.setApplicationMenu(null);
   createControl();
   startUpdates();
+  if (app.isPackaged || process.env.SS_CONTENT_TEST) { setTimeout(checkContent, 12000); setInterval(checkContent, 3 * 60 * 60 * 1000); }
   screen.on('display-added', () => { if (output && !output.isDestroyed()) placeOutput(); else openOutput(false); });
   screen.on('display-removed', () => { placeOutput(); });
   screen.on('display-metrics-changed', () => placeOutput());

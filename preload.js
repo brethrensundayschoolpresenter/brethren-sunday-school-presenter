@@ -12,7 +12,9 @@ contextBridge.exposeInMainWorld('bp', {
   updateNow: () => ipcRenderer.send('update-now'),
   openLink: u => ipcRenderer.send('open-link', u),
   version: () => ipcRenderer.invoke('app-version'),
+  contentInfo: () => ipcRenderer.invoke('content-info'),
+  reloadFresh: () => ipcRenderer.send('reload-fresh'),
   meetLoad: () => ipcRenderer.invoke('meet-load'),
   meetSave: d => ipcRenderer.send('meet-save', d),
-  on: (ch, cb) => { if (['slide', 'style', 'status', 'key', 'update'].includes(ch)) ipcRenderer.on(ch, (e, d) => cb(d)); }
+  on: (ch, cb) => { if (['slide', 'style', 'status', 'key', 'update', 'content'].includes(ch)) ipcRenderer.on(ch, (e, d) => cb(d)); }
 });
