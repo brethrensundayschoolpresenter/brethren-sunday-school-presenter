@@ -77,8 +77,8 @@ function fitBox(el) {
   let k = 1; while (k > 0.4 && (tx.scrollWidth > padW || tx.scrollHeight > padH)) { k -= 0.05; tx.style.fontSize = (base * k) + 'px'; }
 }
 // ---------- load ----------
-function loadHymn(num, cueIdx) {
-  st.back = null;
+function loadHymn(num, cueIdx, hit) {
+  st.back = null; st.hit = hit == null ? -1 : hit;
   st.cur = { kind: 'hymn', num }; st.slides = hymnSlides(num);
   const tp = hymnTopics(num);
   const ti = (window.TOPICS || []).map((t, i) => t.nums.includes(num) ? i : -1).filter(i => i >= 0);
@@ -97,16 +97,18 @@ function loadChapter(b, c, v) {
 const key = () => JSON.stringify(st.cur);
 function renderSlides() {
   const el = $('slides'); el.innerHTML = '';
+  el.classList.toggle('list', !!(st.cur && st.cur.kind === 'bible'));   // verses = lines one under the other
   st.slides.forEach((s, i) => {
     const d = document.createElement('div'); d.className = 'slide th-' + s.theme + (s.end ? ' end' : '');
     if (s.bg && !s.end) { d.style.background = s.bg; d.style.color = s.fg; }
     d.innerHTML = (s.end ? '' : decoOf(s)) + `<span class="lab">${s.lab}</span><div class="tx">${s.html}</div>`;
     d.title = 'ضغطة = جهّزها (ولو الترنيمة معروضة تظهر على طول) · ضغطتين = اعرضها';
+    if (st.cur && st.cur.kind === 'hymn' && i === st.hit) d.classList.add('hit');
     d.onclick = () => pick(i);
     d.ondblclick = () => { setCue(i); play(); };
     el.appendChild(d);
   });
-  requestAnimationFrame(() => [...el.children].forEach(fitBox));
+  if (!el.classList.contains('list')) requestAnimationFrame(() => [...el.children].forEach(fitBox));
   mark();
 }
 function setCue(i) {
@@ -290,27 +292,33 @@ function search() {
     if (!tit.length && !frag.length && !res.length) { empty('مالقيتش ترنيمة فيها الكلام ده<br>جرّب كلمة تانية'); return; }
     const snip = (num, i) => { const s = H[num - 1].slides[i]; return s ? hiLine(s.lines, q) : ''; };
     tit.filter(r => r.score >= 1).forEach(r => { seen.add(r.num); item('', hName(r.num), '', () => loadHymn(r.num)); });
-    frag.forEach(r => { if (seen.has(r.num)) return; seen.add(r.num); itemH(hName(r.num), snip(r.num, r.i), () => loadHymn(r.num, r.i)); });
+    frag.forEach(r => { if (seen.has(r.num)) return; seen.add(r.num); itemH(hName(r.num), snip(r.num, r.i), () => loadHymn(r.num, 0, r.i)); });
     tit.filter(r => r.score < 1).forEach(r => { if (seen.has(r.num)) return; seen.add(r.num); item('', hName(r.num), '', () => loadHymn(r.num)); });
     res.forEach(r => {
       if (seen.has(r.num) || seen.size >= 60) return; seen.add(r.num);
-      itemH(hName(r.num), snip(r.num, r.i), () => loadHymn(r.num, r.i));
+      itemH(hName(r.num), snip(r.num, r.i), () => loadHymn(r.num, 0, r.i));
     });
   } else {
     if (!q) { browseBooks(); return; }
     crumb([{ t: 'كل الأسفار', fn: () => { $('q').value = ''; browseBooks(); } }, { t: 'نتايج البحث' }]);
-    const p = KE.parse(q, H, B);
+    const ab = abbrevRef(q);
+    if (ab) { sec('الشاهد'); item('', ref(ab.b, ab.c, ab.v), plain(B[ab.b].chapters[ab.c][ab.v]).slice(0, 90) + ' — دوس Enter تعرضها', () => openRef(ab)); }
+    const p = ab ? null : KE.parse(q, H, B);
     if (p && p.type === 'verse') { sec('الشاهد'); item('', ref(p.b, p.c, p.v), plain(B[p.b].chapters[p.c][p.v]).slice(0, 90), () => loadChapter(p.b, p.c, p.v)); }
     const res = KE.searchBible(q, 40);
     if (res.length) sec('آيات فيها الكلام ده');
     res.forEach(r => item('', ref(r.b, r.c, r.v), plain(B[r.b].chapters[r.c][r.v]).slice(0, 110), () => loadChapter(r.b, r.c, r.v)));
-    if (!res.length && !(p && p.type === 'verse')) empty('مالقيتش حاجة<br>جرّب كلمة تانية أو اكتب الشاهد زي: يوحنا 3 16');
+    if (!res.length && !ab && !(p && p.type === 'verse')) empty('مالقيتش حاجة<br>جرّب كلمة تانية أو اكتب الشاهد زي: يوحنا 3 16');
   }
 }
 // alphabetical list with a highlighted letter for each group (no numbers)
 const firstLetter = t => { const c = KE.norm(t).charAt(0); return /[a-z]/.test(c) ? 'English' : c || '#'; };
+// inside each letter the newest hymns come first (date of their PowerPoint), then A→Z
 function alphaList(nums) {
-  const sorted = nums.slice().sort((a, b) => a - b); let cur = null;
+  const L0 = n => firstLetter(H[n - 1].title), D0 = n => H[n - 1].d || '';
+  const sorted = nums.slice().sort((a, b) => a - b), order = [...new Set(sorted.map(L0))];
+  sorted.sort((a, b) => order.indexOf(L0(a)) - order.indexOf(L0(b)) || (D0(b) > D0(a) ? 1 : D0(b) < D0(a) ? -1 : a - b));
+  let cur = null;
   sorted.forEach(n => {
     const L = firstLetter(H[n - 1].title);
     if (L !== cur) { cur = L; const d = document.createElement('div'); d.className = 'letter'; d.innerHTML = `<span>${L}</span>`; $('results').appendChild(d); }
@@ -428,17 +436,70 @@ function showHistory(openId) {
 
 
 // ---------- events ----------
+// Bible: "١كو ٣ ١", "تك 1 1", "يو ٣: ١٦", "امثال8 1" (Van Dyke abbreviations or full names)
+const ABBR = { 'تك':0,'خر':1,'لا':2,'عد':3,'تث':4,'يش':5,'قض':6,'را':7,'1صم':8,'2صم':9,'1مل':10,'2مل':11,'1اخ':12,'2اخ':13,'عز':14,'نح':15,'اس':16,'اي':17,'مز':18,'ام':19,'جا':20,'نش':21,'اش':22,'ار':23,'مرا':24,'حز':25,'دا':26,'هو':27,'يوء':28,'يوئ':28,'عا':29,'عو':30,'يون':31,'مي':32,'نا':33,'حب':34,'صف':35,'حج':36,'زك':37,'مل':38,
+  'مت':39,'مر':40,'لو':41,'يو':42,'اع':43,'رو':44,'1كو':45,'2كو':46,'غل':47,'اف':48,'في':49,'كو':50,'1تس':51,'2تس':52,'1تي':53,'2تي':54,'تي':55,'فل':56,'عب':57,'يع':58,'1بط':59,'2بط':60,'1يو':61,'2يو':62,'3يو':63,'يه':64,'رؤ':65 };
+function bookByName(w) {
+  const raw = w.replace(/\s+/g, '');
+  if (ABBR[raw] !== undefined) return ABBR[raw];
+  if (/^يو[ءئ]$|^يؤ$/.test(raw)) return 28;
+  const n = KE.norm(raw).replace(/\s+/g, '');
+  for (const k in ABBR) if (!/[ءئؤ]/.test(k) && KE.norm(k).replace(/\s+/g, '') === n) return ABBR[k];
+  const full = KE.norm(w);
+  for (let i = 0; i < BK.length; i++) if (BK[i].some(x => KE.norm(x) === full)) return i;
+  return -1;
+}
+function abbrevRef(q) {
+  const m = latinDigits(q).replace(/[\u064B-\u0652]/g, '').trim().match(/^([1-3]?\s*[\u0621-\u064A][\u0621-\u064A\s]*?)\s*[.:،,-]?\s*(\d+)(?:\s*[\s.:،,-]\s*(\d+))?\s*$/);
+  if (!m) return null;
+  const b = bookByName(m[1]); if (b < 0) return null;
+  const c = +m[2] - 1, v = m[3] ? +m[3] - 1 : 0;
+  if (!B[b] || !B[b].chapters[c] || B[b].chapters[c][v] === undefined) return null;
+  return { b, c, v };
+}
+function openRef(r) { if (st.tab !== 'bible') setTab('bible'); loadChapter(r.b, r.c, r.v); play(); toast(ref(r.b, r.c, r.v) + ' — اتعرضت · رقم + Enter = آية تانية'); }
+const isB = e => e.code === 'KeyB' || e.key === 'b' || e.key === 'B' || e.key === 'لا';
 function onKey(e) {
   const tag = (e.target && e.target.tagName) || '';
   if (tag === 'INPUT' || tag === 'SELECT') return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (document.getElementById('tourBox') && e.key === 'Escape') return;
+  if (isB(e)) { e.preventDefault(); blank(); return; }          // B (also "لا" on the Arabic keyboard)
+  // typing anywhere goes straight into the search box
+  if ((st.tab === 'hymns' || st.tab === 'bible') && e.key.length === 1 && e.code !== 'Space') { $('q').value = ''; $('q').focus(); return; }
+  // verses: ↓ ↑ walk the list, Enter shows the verse
+  if (st.cur && st.cur.kind === 'bible' && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); setCue((onAir() ? st.live : st.cue) + (e.key === 'ArrowDown' ? 1 : -1)); return; }
+  if (e.key === 'Enter' && st.cur) { e.preventDefault(); play(); return; }
   if (e.code === 'Space') { e.preventDefault(); play(); }
   else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown' || e.key === 'PageDown') { e.preventDefault(); step(1); }
   else if (e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'PageUp') { e.preventDefault(); step(-1); }
-  else if (e.key === 'b' || e.key === 'B' || e.key === 'لا') blank();
 }
 document.addEventListener('keydown', onKey);
-let qT; $('q').addEventListener('input', () => { clearTimeout(qT); qT = setTimeout(search, 220); });
-$('q').addEventListener('keydown', e => { if (e.key === 'Enter') { const f = $('results').querySelector('.item'); if (f) f.click(); } });
+let qT, qPending = false; $('q').addEventListener('input', () => { [...$('results').querySelectorAll('.kb')].forEach(x => x.classList.remove('kb')); clearTimeout(qT); qPending = true; qT = setTimeout(() => { qPending = false; search(); }, 220); });
+$('q').addEventListener('keydown', e => {
+  if (e.key === 'Escape') { $('q').blur(); return; }
+  // ↓ ↑ walk the results, Enter opens the one you are on (a hymn opens from its start and shows on the screen)
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    const its = [...$('results').querySelectorAll('.item')]; if (!its.length) return;
+    e.preventDefault();
+    let i = its.findIndex(x => x.classList.contains('kb'));
+    i = i < 0 ? (e.key === 'ArrowDown' ? 0 : its.length - 1) : Math.max(0, Math.min(its.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)));
+    its.forEach(x => x.classList.remove('kb')); its[i].classList.add('kb'); its[i].scrollIntoView({ block: 'nearest' });
+    return;
+  }
+  if (e.key !== 'Enter') return;
+  if (qPending) { clearTimeout(qT); qPending = false; search(); }
+  const q = latinDigits($('q').value.trim()); let done = false;
+  if (st.tab === 'bible' && /^\d+$/.test(q) && st.cur && st.cur.kind === 'bible') {
+    const v = +q - 1;
+    if (B[st.cur.b].chapters[st.cur.c][v] !== undefined) { setCue(v); play(); done = true; } else toast('الإصحاح ده مافيهوش العدد ده');
+  } else if (st.tab === 'bible' && abbrevRef(q)) { openRef(abbrevRef(q)); done = true; }
+  else {
+    const f = $('results').querySelector('.item.kb') || $('results').querySelector('.item');
+    if (f) { const before = key(); f.click(); if (key() !== before && st.cur) { play(); $('q').blur(); } }
+  }
+  if (done) { $('q').value = ''; $('q').blur(); search(); }
+});
 document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => setTab(b.dataset.tab));
 $('openOut').onclick = openOut;
 $('blankBtn').onclick = blank;
@@ -465,6 +526,14 @@ if (APP && window.bp.on) window.bp.on('content', c => {
 });
 // "what's new" after an update: shown once per new version, never on a first install
 const WHATSNEW = {
+  '1.0.9': [
+    'زرار جديد فوق: <b>طريقة الاستخدام</b> — شرح سريع لكل حاجة في البرنامج.',
+    'اكتب على طول من غير ما تدوس على البحث، وانزل في النتايج بالأسهم <b>↓ ↑</b> ودوس <b>Enter</b> — الترنيمة بتتفتح من أولها وتظهر، والعدد اللي فيه الكلام اللي دورت عليه بيتعلّم بالأصفر.',
+    'جوه كل حرف، الترانيم الأحدث بقت الأول.',
+    'الكتاب المقدس: اكتب الاختصار زي <b>يو ٣ ١٦</b> أو <b>١كو ١٣ ٤</b> ودوس Enter، وبعدها أي رقم + Enter = آية تانية في نفس الإصحاح.',
+    'شاشة "على الشاشة الآن" بقت فوق وكبيرة، و"التالي" صغيرة تحتها. وزرار السابق بقى يمين والتالي شمال زي الأسهم.',
+    'البرنامج بقى مظبوط على الشاشات الصغيرة (اللابتوب).'
+  ],
   '1.0.7': [
     'تحديثات الترانيم بقت بتوصل لوحدها وانت فاتح البرنامج على النت — من غير تسطيب ومن غير ما البرنامج يقفل.',
     'لما يوصل تحديث للترانيم هيظهر فوق زرار <b>✨ ترانيم جديدة</b> — دوس عليه وهتلاقيها في القايمة على طول.',

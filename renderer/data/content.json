@@ -1,12 +1,10 @@
 {
- "dataVersion": 2,
- "minApp": "1.0.7",
+ "dataVersion": 3,
+ "minApp": "1.0.9",
  "files": {
-  "hymns.js": "6293850d545f35aa980db677168cf1a4d7866dee73d3750872b2971e47bb2dac",
+  "hymns.js": "2465a98ea3b8dd55452c4b08fda205235b9282f257d790e36850534fd831f48a",
   "topics.js": "c393963fd04802088eeb831082f9734f88bbd407cdf4cbde9144fd492dd011fe",
   "stories.js": "667ec2410df34afc78575cae6e30d1eb347ab092e3bbb5c54c131ca376cc6c4d"
  },
- "notes": [
-  "اتصلحت غلطة في ترنيمة «الله هو الخالق»."
- ]
+ "notes": []
 }
