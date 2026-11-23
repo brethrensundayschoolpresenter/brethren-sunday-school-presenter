@@ -53,7 +53,13 @@ main{display:grid;grid-template-columns:330px 1fr 440px;gap:14px;padding:14px;mi
 .story{margin:0 16px 10px;padding:10px 14px;border:2px dashed var(--line);border-radius:14px;background:#fff}
 .story .sth{font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
 .story .sth b{font-size:15px}
-.story{cursor:pointer}.story:hover{border-color:#111}
+.story .st-open,.story .vch{cursor:pointer}.story .st-open:hover .stref{color:#111}
+.story .sti{font-size:15px;line-height:1.8;font-weight:600;margin-bottom:6px}
+.story .stv{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px;font-size:14px}
+.story .vch{border:1.5px solid var(--line);border-radius:10px;padding:3px 9px;background:#fafafa;font-weight:600}
+.story .vch small{color:var(--mut);font-weight:700;margin-right:4px}
+.story .vch:hover{border-color:#111}
+.story .sts{border-top:1.5px dashed var(--line);padding-top:8px}
 .story .stref{margin-right:auto;color:var(--mut);font-weight:700;font-size:13px;text-decoration:underline;text-underline-offset:3px}
 .story:hover .stref{color:#111}
 .backbtn{margin-right:auto;font-size:14px;padding:6px 12px;background:var(--hi);border-color:#111}
@@ -203,7 +209,7 @@ main > .col:last-child{overflow-y:auto}
   <button class="btn" id="dataBtn" style="display:none;background:#fffbd6;border-color:#e6c800"></button>
   <button class="btn" id="tourBtn" onclick="startTour()" title="شرح سريع للبرنامج"><svg class="ic"><use href="#i-help"/></svg>طريقة الاستخدام</button>
   <button class="btn" id="sugBtn" title="لقيت غلطة في ترنيمة أو عندك فكرة؟ ابعتها لصفحة مدرسة الأحد على فيسبوك"><svg class="ic"><use href="#i-chat"/></svg>ابعت اقتراح</button>
-  <button class="btn" id="storyBtn" title="قصة صغيرة من الكتاب المقدس مناسبة لكل ترنيمة"><svg class="ic"><use href="#i-book"/></svg>قصة مقترحة</button>
+  <button class="btn" id="storyBtn" title="فكرة الترنيمة والآيات اللي فيها وقصة من الكتاب المقدس مناسبة ليها"><svg class="ic"><use href="#i-book"/></svg>قصة مقترحة</button>
   <button class="btn" id="setBtn"><svg class="ic"><use href="#i-brush"/></svg>الشكل والخط</button>
   <button class="btn" id="blankBtn" title="إخفاء أي كلام من على الشاشة (B)"><svg class="ic"><use href="#i-eyeoff"/></svg>إخفاء الشاشة</button>
   <button class="btn dark" id="openOut"><svg class="ic"><use href="#i-monitor"/></svg><span id="outLbl">فتح شاشة العرض</span></button>

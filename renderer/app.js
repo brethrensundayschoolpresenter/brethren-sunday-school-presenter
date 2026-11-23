@@ -46,22 +46,44 @@ function paint(el, s) {
   el.innerHTML = decoOf(s) + (s.num ? `<span class="vn">${s.num}</span>` : '') + `<div class="tx">${s.html}</div>`;
   if (el.classList.contains('screen')) fitBox(el);
 }
-// suggested simple Bible story for the kids (button "قصة مقترحة" turns it on/off)
-function showStory(num) {
-  const el = $('story'), st = num && window.HSTORY && window.STORIES ? window.STORIES[window.HSTORY[num]] : null;
-  if (!st || SET.story === false) { el.style.display = 'none'; el.innerHTML = ''; return; }
-  el.style.display = '';
-  el.innerHTML = `<div class="sth"><span class="hl">قصة مقترحة</span> <b>${esc(st.name)}</b> <span class="stref">${esc(st.disp)} ‹ افتحها</span></div><div class="stt">${esc(st.text)}</div>`;
-  el.title = 'اضغط لفتح القصة في الكتاب المقدس من أول آية';
-  el.onclick = () => openStory(st);
+// suggested Bible story + the hymn's idea + the verses its words echo (button "قصة مقترحة" turns it on/off)
+// HDEEP[num] = {i: idea, v: [[ref, phrase]], s: [title, ref, why]} — refs like "لو 15 20-24" (Van Dyke abbreviations)
+function deepRef(r) {
+  const m = String(r || '').match(/^(\S+) (\d+) (\d+)(?:-(\d+))?$/); if (!m) return null;
+  const b = bookByName(m[1]); if (b < 0 || !B[b]) return null;
+  const c = +m[2] - 1, v = +m[3] - 1, v2 = m[4] ? +m[4] - 1 : v;
+  if (!B[b].chapters[c] || B[b].chapters[c][v] === undefined) return null;
+  return { b, c, v, v2 };
 }
-// open the story in the Bible on its first verse, remembering the hymn so "رجوع للترنيمة" brings it back
+function refTxt(p) { return ref(p.b, p.c, p.v) + (p.v2 > p.v ? '–' + arD(p.v2 + 1) : ''); }
+function showStory(num) {
+  const el = $('story'), d = num && window.HDEEP ? window.HDEEP[num] : null;
+  const old = !d && num && window.HSTORY && window.STORIES ? window.STORIES[window.HSTORY[num]] : null;
+  if ((!d && !old) || SET.story === false) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = ''; el.onclick = null; el.title = '';
+  if (old) {
+    el.innerHTML = `<div class="sth st-open"><span class="hl">قصة مقترحة</span> <b>${esc(old.name)}</b> <span class="stref">${esc(old.disp)} ‹ افتحها</span></div><div class="stt">${esc(old.text)}</div>`;
+    el.querySelector('.st-open').onclick = () => openStory(old); return;
+  }
+  const sp = deepRef(d.s[1]);
+  const vs = (d.v || []).map(([r, ph]) => [deepRef(r), ph]).filter(x => x[0]);
+  el.innerHTML = `<div class="sti"><span class="hl">فكرة الترنيمة</span> ${esc(d.i)}</div>`
+    + (vs.length ? `<div class="stv"><span class="hl">آيات في الترنيمة</span> ${vs.map(([p, ph], k) => `<a class="vch" data-k="${k}" title="افتح الآية في الكتاب المقدس">«${esc(ph)}» <small>${esc(refTxt(p))}</small></a>`).join('')}</div>` : '')
+    + (sp ? `<div class="sts st-open" title="اضغط لفتح القصة في الكتاب المقدس من أول آية"><div class="sth"><span class="hl">قصة مقترحة</span> <b>${esc(d.s[0])}</b> <span class="stref">${esc(refTxt(sp))} ‹ افتحها</span></div><div class="stt">${esc(d.s[2])}</div></div>` : '');
+  el.querySelectorAll('.vch').forEach(a => a.onclick = () => openAt(vs[+a.dataset.k][0], vs[+a.dataset.k][1]));
+  const so = el.querySelector('.st-open'); if (so) so.onclick = () => openAt(sp, d.s[0]);
+}
+// open a Bible passage (from a hymn) on its first verse, remembering the hymn so "رجوع للترنيمة" brings it back
+function openAt(p, label) {
+  if (!p) { toast('مش لاقي الشاهد ده'); return; }
+  if (st.cur && st.cur.kind === 'hymn') st.back = { num: st.cur.num, cue: st.cue, tab: st.tab, q: $('q').value, story: label };
+  setTab('bible'); browseChapters(p.b); loadChapter(p.b, p.c, p.v);
+  const n = $('slides').children[p.v]; if (n) n.scrollIntoView({ block: 'start' });
+}
 function openStory(story) {
   const p = KE.parse(story.ref.replace(/(\d+):(\d+)/, '$1 $2'), H, B);
   if (!p || p.type !== 'verse') { toast('مش لاقي الشاهد ده'); return; }
-  if (st.cur && st.cur.kind === 'hymn') st.back = { num: st.cur.num, cue: st.cue, tab: st.tab, q: $('q').value, story: story.name };
-  setTab('bible'); browseChapters(p.b); loadChapter(p.b, p.c, p.v);
-  const n = $('slides').children[p.v]; if (n) n.scrollIntoView({ block: 'start' });
+  openAt({ b: p.b, c: p.c, v: p.v, v2: p.v }, story.name);
 }
 function goBack() {
   const b = st.back; if (!b) return; st.back = null;
@@ -526,6 +548,10 @@ if (APP && window.bp.on) window.bp.on('content', c => {
 });
 // "what's new" after an update: shown once per new version, never on a first install
 const WHATSNEW = {
+  '1.0.10': [
+    'تحت كل ترنيمة: فكرة الترنيمة، والآيات اللي كلامها مأخوذ منها (اضغط على أي آية تفتحها)، وقصة مقترحة ليها مع سبب اختيارها.',
+    'المواضيع اتراجعت لكل الترانيم على حسب كلامها.'
+  ],
   '1.0.9': [
     'زرار جديد فوق: <b>طريقة الاستخدام</b> — شرح سريع لكل حاجة في البرنامج.',
     'اكتب على طول من غير ما تدوس على البحث، وانزل في النتايج بالأسهم <b>↓ ↑</b> ودوس <b>Enter</b> — الترنيمة بتتفتح من أولها وتظهر، والعدد اللي فيه الكلام اللي دورت عليه بيتعلّم بالأصفر.',
