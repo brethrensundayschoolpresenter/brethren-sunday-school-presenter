@@ -546,10 +546,13 @@ if (APP && window.bp.on) window.bp.on('content', c => {
   const b = $('dataBtn'); b.style.display = ''; b.textContent = '✨ ترانيم جديدة — اعرضها';
   b.title = (c.notes || []).map(x => x.replace(/<[^>]+>/g, '')).join('\n');
   b.onclick = () => { if (window.bp.reloadFresh) window.bp.reloadFresh(); else location.reload(); };
-  toast('وصل تحديث جديد للترانيم ✨');
+  toast('وصل تحديث للترانيم ✨ — دوس الزرار الأصفر فوق، أو هيظهر لوحده المرة الجاية');
 });
 // "what's new" after an update: shown once per new version, never on a first install
 const WHATSNEW = {
+  '1.0.12': [
+    'بعد أي تحديث بتظهرلك رسالة لوحدها: «ترنيمة جديدة اتضافت» وتقدر تفتحها منها على طول، أو «الترانيم اتحدّثت»، أو «البرنامج اتحدّث».'
+  ],
   '1.0.11': [
     'شاشة العرض بتفتح على البروجكتور لوحدها أول ما توصّله وتعمل Extend (ويندوز + P)، ومش محتاج تدوس حاجة.',
     'الزرار اللي فوق بقى بيقولك حالتها: «شغالة على البروجكتور»، ولو مفيش بروجكتور اسمه «تجربة شاشة العرض».'
@@ -576,26 +579,36 @@ const WHATSNEW = {
     'الشاشة دي هتظهرلك بعد كل تحديث عشان تعرف الجديد في البرنامج.'
   ]
 };
+// popup after an update (opens by itself once, never on a first install):
+//  app changed  -> «البرنامج اتحدّث» (+ new hymns / hymn fixes as their own lines)
+//  only hymns   -> «ترنيمة جديدة اتضافت» (names, click = open it) or «الترانيم اتحدّثت» (the notes)
 async function showNews() {
   let v = '', ci = null;
   try { v = APP && window.bp.version ? await window.bp.version() : ''; } catch (e) {}
   try { ci = APP && window.bp.contentInfo ? await window.bp.contentInfo() : null; } catch (e) {}
   if (!v) return;
-  let seenV = null, seenD = 0;
+  let seenV = null, seenD = 0, seenN = 0;
   try {
-    seenV = localStorage.getItem('ss_seen_ver'); seenD = +(localStorage.getItem('ss_seen_data') || 0);
-    localStorage.setItem('ss_seen_ver', v); if (ci) localStorage.setItem('ss_seen_data', String(ci.version));
+    seenV = localStorage.getItem('ss_seen_ver'); seenD = +(localStorage.getItem('ss_seen_data') || 0); seenN = +(localStorage.getItem('ss_seen_count') || 0);
+    localStorage.setItem('ss_seen_ver', v); if (ci) localStorage.setItem('ss_seen_data', String(ci.version)); localStorage.setItem('ss_seen_count', String(H.length));
   } catch (e) { return; }
   if (!HAD_SET) return;   // first install: nothing to announce
-  const items = [];
-  // everything new since the version this copy showed last (someone may jump several versions at once)
   const vnum = s => String(s || '0').split('.').map(Number).reduce((a, x) => a * 1000 + (x || 0), 0);
-  if (seenV !== v) Object.keys(WHATSNEW).filter(k => vnum(k) <= vnum(v) && (!seenV || vnum(k) > vnum(seenV))).sort((a, b) => vnum(b) - vnum(a)).forEach(k => items.push(...WHATSNEW[k]));
-  const dataNews = ci && ci.version > seenD && (ci.notes || []).length;
-  if (dataNews) items.push(...ci.notes);
-  if (!items.length) return;
-  $('newsVer').textContent = 'النسخة ' + v + (dataNews ? ' · تحديث الترانيم ' + ci.version : '');
-  $('newsList').innerHTML = items.map(x => '<li>' + x + '</li>').join('');
+  const appItems = [];
+  if (seenV && seenV !== v) Object.keys(WHATSNEW).filter(k => vnum(k) <= vnum(v) && vnum(k) > vnum(seenV)).sort((a, b) => vnum(b) - vnum(a)).forEach(k => appItems.push(...WHATSNEW[k]));
+  const newH = seenN && H.length > seenN ? H.slice(seenN) : [];
+  const notes = ci && ci.version > seenD ? (ci.notes || []).filter(t => !newH.some(h => t.includes(h.title))) : [];
+  if (!appItems.length && !newH.length && !notes.length) return;
+  const title = appItems.length ? 'البرنامج اتحدّث' : newH.length ? (newH.length > 1 ? 'ترانيم جديدة اتضافت' : 'ترنيمة جديدة اتضافت') : 'الترانيم اتحدّثت';
+  $('newsTitle').textContent = '✨ ' + title;
+  $('newsVer').textContent = (appItems.length ? 'النسخة ' + v : '') + (ci && ci.version > seenD ? (appItems.length ? ' · ' : '') + 'تحديث الترانيم ' + ci.version : '');
+  let html = '';
+  if (newH.length) html += (appItems.length ? `<li class="nh-t">${newH.length > 1 ? 'ترانيم جديدة اتضافت' : 'ترنيمة جديدة اتضافت'}:</li>` : '') + newH.map(h => `<li class="nh"><a data-n="${h.num}">«${esc(h.title)}» <span>افتحها ‹</span></a></li>`).join('');
+  html += notes.map(x => '<li>' + x + '</li>').join('');
+  if (appItems.length && (newH.length || notes.length)) html += '<li class="nh-t">جديد في البرنامج:</li>';
+  html += appItems.map(x => '<li>' + x + '</li>').join('');
+  $('newsList').innerHTML = html;
+  $('newsList').querySelectorAll('a[data-n]').forEach(a => a.onclick = () => { $('news').classList.remove('open'); setTab('hymns'); loadHymn(+a.dataset.n, 0); });
   $('news').classList.add('open');
 }
 $('newsOk').onclick = () => $('news').classList.remove('open');
