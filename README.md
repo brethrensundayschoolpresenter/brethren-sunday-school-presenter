@@ -15,7 +15,7 @@
 - الكتاب المقدس، واختصارات الشواهد زي <bdi>يو ٣ ١٦</bdi>
 - شاشة للبروجكتور، وبيشتغل من غير نت، وبيتحدّث لوحده
 
-📄 **طريقة التسطيب بالصور:** [<bdi>How-to-Install.pdf</bdi>](How-to-Install.pdf)
+📄 **دليل البرنامج بالصور (التسطيب والاستخدام، كمبيوتر وموبايل):** [<bdi>How-to-Install.pdf</bdi>](How-to-Install.pdf)
 
 **التحميل:** من صفحة [التحميل](../../releases/latest) نزّل أول ملف — اسمه بيبدأ بـ <code>Brethren-Sunday-School-Presenter-Setup</code> — وشغّله.
 
