@@ -2,7 +2,7 @@
 
 # Brethren Sunday School Presenter - ترانيم مدارس الأحد
 
-![Brethren Sunday School Presenter](https://brethrensundayschoolpresenter.github.io/preview.png?v=3)
+![Brethren Sunday School Presenter](https://brethrensundayschoolpresenter.github.io/preview.png?v=4)
 
 ## ⬇️ [اضغط هنا للتحميل](https://brethrensundayschoolpresenter.github.io/)
 
@@ -11,8 +11,8 @@
 **في البرنامج:**
 - ٩٦٧ ترنيمة، وبحث بالاسم أو بأي جملة حتى لو الكلمة مكتوبة غلط
 - تحت كل ترنيمة: فكرتها، والآيات اللي كلامها مأخوذ منها (تفتح بضغطة)، وقصة مقترحة من الكتاب المقدس
-- ٣٥ موضوع من الكتاب المقدس
-- الكتاب المقدس مشكّل، واختصارات الشواهد زي <bdi>يو 3 16</bdi>
+- الترانيم متقسمة موضوعات
+- الكتاب المقدس، واختصارات الشواهد زي <bdi>يو ٣ ١٦</bdi>
 - شاشة للبروجكتور، ومجاني ومن غير نت، وبيتحدّث لوحده
 
 📄 **طريقة التسطيب بالصور:** [<bdi>How-to-Install.pdf</bdi>](How-to-Install.pdf)
