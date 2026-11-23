@@ -383,6 +383,7 @@ const latinDigits = s => String(s).replace(/\p{Cf}/gu, '').replace(/\p{Nd}/gu, d
 function search() {
   const q = latinDigits($('q').value.trim()); $('results').innerHTML = ''; $('results').scrollTop = 0;
   if (st.tab === 'today') { crumb([]); showToday(); return; }
+  if (st.tab === 'plan') { crumb([]); showPlanTab(); return; }
   if (st.tab === 'history') { showHistory(); return; }
   if (st.tab === 'topics') { showTopics(); return; }
   if (st.tab === 'hymns') {
@@ -454,7 +455,7 @@ function hymnTopics(num) { return (window.TOPICS || []).filter(t => t.nums.inclu
 function setTab(t) {
   st.tab = t; document.querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('on', x.dataset.tab === t));
   $('q').value = ''; $('q').placeholder = t === 'hymns' ? 'اسم الترنيمة أو أي كلام منها…' : 'اكتب الشاهد (يوحنا 3 16) أو أي كلام من الآية…';
-  document.querySelector('.search').style.display = (t === 'today' || t === 'history' || t === 'topics') ? 'none' : '';
+  document.querySelector('.search').style.display = (t === 'today' || t === 'history' || t === 'topics' || t === 'plan') ? 'none' : '';
   search(); if (t === 'hymns' || t === 'bible') $('q').focus();
 }
 
@@ -531,18 +532,18 @@ async function planFromFile(file) {
   let list = null;
   try { const d = JSON.parse(await file.text()); if (d && d.app === 'ssw-forsa' && Array.isArray(d.forsas)) list = d.forsas.filter(f => f && Array.isArray(f.items)); } catch (e) {}
   if (!list || !list.length) { toast('الملف ده مش فرصة من «فرصي» على الموبايل'); return; }
-  setTab('today');
+  setTab('plan');
   if (list.length === 1) { planUse(list[0]); return; }
   // a full backup: choose which فرصة (the next one first)
   const t = todayId(), sorted = list.slice().sort((a, b) => (a.date >= t) !== (b.date >= t) ? (a.date >= t ? -1 : 1) : a.date >= t ? (a.date > b.date ? 1 : -1) : (a.date < b.date ? 1 : -1));
-  $('results').innerHTML = ''; crumb([{ t: 'النهارده', fn: () => search() }, { t: 'اختار الفرصة' }]);
+  $('results').innerHTML = ''; crumb([{ t: 'فرصي', fn: () => search() }, { t: 'اختار الفرصة' }]);
   sorted.forEach(f => item('', planName(f), planDate(f.date) + (f.place ? ' · ' + f.place : '') + ' · ' + f.items.length + (f.items.length === 1 ? ' حاجة' : ' حاجات'), () => planUse(f)));
 }
-function planUse(f) { PLAN = f; st.planSel = null; savePlan(); setTab('today'); search(); toast('الفرصة جاهزة: ' + planName(f)); }
+function planUse(f) { PLAN = f; st.planSel = null; savePlan(); setTab('plan'); search(); toast('الفرصة جاهزة: ' + planName(f)); }
 function planOpen(it, i) {
   st.planSel = i;
   if (it.t === 'h') { const n = hymnOf({ title: it.title, num: it.n }); if (n) loadHymn(n, 0); else toast('الترنيمة دي مش لاقيها'); }
-  else if (B[it.b] && B[it.b].chapters[it.c]) {   // stay on «النهارده» so the next item is one click away
+  else if (B[it.b] && B[it.b].chapters[it.c]) {   // stay on «فرصي» so the next item is one click away
     st.sug = { b: it.b, c: it.c, v: it.v, v2: it.v2 != null ? it.v2 : it.v }; st.back = null;
     loadChapter(it.b, it.c, it.v); const n = $('slides').children[it.v]; if (n) n.scrollIntoView({ block: 'start' });
   }
@@ -564,9 +565,13 @@ function showPlan() {
 // drop the file on the window = open it
 document.addEventListener('dragover', e => { if (e.dataTransfer && [...e.dataTransfer.items].some(x => x.kind === 'file')) e.preventDefault(); });
 document.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files[0]; if (f && /\.json$/i.test(f.name)) { e.preventDefault(); planFromFile(f); } });
+// «فرصي» tab: the فرصة from the phone, or how to open one
+function showPlanTab() {
+  if (PLAN) { showPlan(); const o = document.createElement('button'); o.className = 'plan-open'; o.style.marginTop = '10px'; o.innerHTML = '<b>فرصة تانية؟</b> افتح ملف تاني من «فرصي» (أو اسحبه هنا)'; o.onclick = planPick; $('results').appendChild(o); return; }
+  const o = document.createElement('button'); o.className = 'plan-open'; o.innerHTML = '<b>عندك فرصة محضّرها على الموبايل؟</b> افتح الملف اللي بعته لنفسك من «فرصي» (أو اسحبه هنا)'; o.onclick = planPick; $('results').appendChild(o);
+  empty('<b>📱</b>على الموبايل: افتح الفرصة في «فرصي» ودوس «هتعرضها على الكمبيوتر؟»، وابعتها لنفسك واتساب.<br>وعلى الكمبيوتر افتح الملف من هنا، تلاقي الترانيم والشواهد بالترتيب وملاحظاتك.');
+}
 function showToday() {
-  if (PLAN) showPlan();
-  else { const o = document.createElement('button'); o.className = 'plan-open'; o.innerHTML = '<b>عندك فرصة محضّرها على الموبايل؟</b> افتح الملف اللي بعته لنفسك من «فرصي» (أو اسحبه هنا)'; o.onclick = planPick; $('results').appendChild(o); }
   const m = curMeeting(), head = document.createElement('div'); head.className = 'meethead';
   head.innerHTML = `<b>${esc(m.title)}</b>`;
   const nb = document.createElement('button'); nb.className = 'btn'; nb.textContent = 'خدمة جديدة';
@@ -686,7 +691,8 @@ if (APP && window.bp.on) window.bp.on('content', c => {
 });
 // "what's new" after an update: shown once per new version, never on a first install
 const WHATSNEW = {
-  '1.0.13': ['«الشكل والخط»: تقدر تحط صورة في خلفية الترانيم (أو صورتين يتبادلوا زي اللونين) — البرنامج بيغمّقها ويعملها blur عشان الكلام يبان، ويختار لون الكلام لوحده (وتقدر تغيّره تحت كل صورة). الصور بتتحفظ على الجهاز ده بس.', '«ابعت اقتراح» بقى بيفتح واتساب على طول: ابعت أي غلطة، أو لو عايز تضيف ترنيمة ابعتها لنا مكتوبة تكست أو باوربوينت.', '«النهارده»: افتح الفرصة اللي حضّرتها على الموبايل في «فرصي» — ابعت الملف لنفسك واتساب وافتحه هنا، وتلاقي الترانيم والشواهد بالترتيب وملاحظاتك.', 'لما تفتح آية أو قصة من الترنيمة، الآيات المقترحة بتبقى متعلّم عليها بالأصفر في الكتاب المقدس.', 'في الكتاب المقدس الأسهم فوق وتحت بتقلّب الآيات زي الأسهم يمين وشمال، ولو الآية معروضة اللي بعدها بتظهر على طول.'],
+  '1.0.14': ['«فرصي» بقت تبويب لوحدها جنب «النهارده»: افتح فيها الفرصة اللي حضّرتها على الموبايل في «فرصي».', '«ابعت اقتراح» بيفتح واتساب: ابعت أي غلطة، أو لو عايز تضيف ترنيمة ابعتها لنا مكتوبة تكست أو باوربوينت.'],
+  '1.0.13': ['«الشكل والخط»: تقدر تحط صورة في خلفية الترانيم (أو صورتين يتبادلوا زي اللونين) — البرنامج بيغمّقها ويعملها blur عشان الكلام يبان، ويختار لون الكلام لوحده (وتقدر تغيّره تحت كل صورة). الصور بتتحفظ على الجهاز ده بس.', '«ابعت اقتراح» بقى بيفتح واتساب على طول: ابعت أي غلطة، أو لو عايز تضيف ترنيمة ابعتها لنا مكتوبة تكست أو باوربوينت.', '«فرصي»: افتح الفرصة اللي حضّرتها على الموبايل في «فرصي» — ابعت الملف لنفسك واتساب وافتحه هنا، وتلاقي الترانيم والشواهد بالترتيب وملاحظاتك.', 'لما تفتح آية أو قصة من الترنيمة، الآيات المقترحة بتبقى متعلّم عليها بالأصفر في الكتاب المقدس.', 'في الكتاب المقدس الأسهم فوق وتحت بتقلّب الآيات زي الأسهم يمين وشمال، ولو الآية معروضة اللي بعدها بتظهر على طول.'],
   '1.0.12': [
     'بعد أي تحديث بتظهرلك رسالة لوحدها: «ترنيمة جديدة اتضافت» وتقدر تفتحها منها على طول، أو «الترانيم اتحدّثت»، أو «البرنامج اتحدّث».'
   ],
