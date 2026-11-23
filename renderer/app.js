@@ -23,7 +23,79 @@ function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add
 const hName = num => H[num - 1].title;
 // the two colours that alternate (one of the ready pairs, or his own two colours)
 function curPair() { return SET.pair === 'custom' ? { a: SET.c1, b: SET.c2 } : (DECO.PAIRS.find(p => p.id === SET.pair) || DECO.PAIRS[0]); }
-function slideColors(i) { const p = curPair(), bg = i % 2 ? p.b : p.a; return { bg, fg: DECO.textOn(bg) }; }
+function slideColors(i) {
+  const im = useImgs();
+  if (im) { const g = im[i % im.length]; return { bg: `url("${g.out}") center / cover no-repeat ${g.avg}`, fg: g.fg, img: true }; }
+  const p = curPair(), bg = i % 2 ? p.b : p.a; return { bg, fg: DECO.textOn(bg) };
+}
+// ---------- background pictures (16:9): saved on this computer only, blurred + dimmed so the words read; text colour picked from the result ----------
+let BGI = [];
+try { BGI = JSON.parse(localStorage.getItem('ss_bgimgs') || '[]'); } catch (e) {}
+const saveBGI = () => { try { localStorage.setItem('ss_bgimgs', JSON.stringify(BGI)); return true; } catch (e) { toast('الصورة كبيرة على الحفظ — جرّب صورة تانية'); return false; } };
+const useImgs = () => SET.useImg && BGI.length ? BGI : null;
+const loadImg = src => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; });
+// cover-crop to 1920x1080 (the original, kept so «أفتح / أغمق» can redo it)
+async function bgOriginal(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const im = await loadImg(url), W = 1920, Hh = 1080, c = document.createElement('canvas'); c.width = W; c.height = Hh;
+    const k = Math.max(W / im.naturalWidth, Hh / im.naturalHeight), w = im.naturalWidth * k, h = im.naturalHeight * k;
+    c.getContext('2d').drawImage(im, (W - w) / 2, (Hh - h) / 2, w, h);
+    return c.toDataURL('image/jpeg', 0.85);
+  } finally { URL.revokeObjectURL(url); }
+}
+// blur + a dark veil tinted with the picture's own colour; then the text is white or black, whichever reads better
+async function bgProcess(g) {
+  const im = await loadImg(g.orig), W = 1920, Hh = 1080, c = document.createElement('canvas'); c.width = W; c.height = Hh;
+  const x = c.getContext('2d');
+  x.filter = 'blur(16px)'; x.drawImage(im, -48, -27, W + 96, Hh + 54); x.filter = 'none';
+  const sm = document.createElement('canvas'); sm.width = 32; sm.height = 18; const sx = sm.getContext('2d'); sx.drawImage(c, 0, 0, 32, 18);
+  const px = sx.getImageData(0, 0, 32, 18).data; let r = 0, gg = 0, b = 0; for (let i = 0; i < px.length; i += 4) { r += px[i]; gg += px[i + 1]; b += px[i + 2]; }
+  const n = px.length / 4; r /= n; gg /= n; b /= n;
+  const dim = g.dim != null ? g.dim : 0.55;                       // 0 = the picture as it is … 0.85 = very dark
+  x.fillStyle = `rgba(${Math.round(r * 0.25)},${Math.round(gg * 0.25)},${Math.round(b * 0.25)},${dim})`; x.fillRect(0, 0, W, Hh);
+  // measure the middle (where the words are) after the veil
+  sx.clearRect(0, 0, 32, 18); sx.drawImage(c, 0, 0, 32, 18); const q = sx.getImageData(6, 4, 20, 10).data; let L = 0;
+  for (let i = 0; i < q.length; i += 4) { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; L += 0.2126 * f(q[i]) + 0.7152 * f(q[i + 1]) + 0.0722 * f(q[i + 2]); }
+  L /= q.length / 4;
+  g.fgAuto = L > 0.3 ? '#111111' : '#ffffff';
+  if (!g.fgSet) g.fg = g.fgAuto;                                   // a colour he picked himself stays
+  g.avg = `rgb(${Math.round(r * (1 - dim * 0.75))},${Math.round(gg * (1 - dim * 0.75))},${Math.round(b * (1 - dim * 0.75))})`;
+  g.out = c.toDataURL('image/jpeg', 0.82);
+  return g;
+}
+function bgPick() {
+  let inp = $('bgFile');
+  if (!inp) { inp = document.createElement('input'); inp.type = 'file'; inp.id = 'bgFile'; inp.accept = 'image/*'; inp.style.display = 'none'; document.body.appendChild(inp); inp.onchange = async () => { const f = inp.files[0]; inp.value = ''; if (f) bgAdd(f); }; }
+  inp.click();
+}
+async function bgAdd(file) {
+  try {
+    toast('بجهّز الصورة…');
+    const g = await bgProcess({ orig: await bgOriginal(file), dim: 0.55 });
+    BGI.push(g); if (BGI.length > 2) BGI.shift();
+    if (!saveBGI()) { BGI.pop(); return; }
+    SET.useImg = true; relook(); bgChips(); toast(BGI.length > 1 ? 'الصورتين هيتبادلوا زي اللونين' : 'الصورة بقت خلفية الترانيم — تقدر تضيف صورة تانية تتبادل معاها');
+  } catch (e) { toast('مش قادر أفتح الصورة دي'); }
+}
+async function bgDim(d) {
+  if (!BGI.length) return;
+  for (const g of BGI) { g.dim = Math.max(0, Math.min(0.85, +((g.dim != null ? g.dim : 0.55) + d).toFixed(2))); await bgProcess(g); }
+  saveBGI(); SET.useImg = true; relook(); bgChips();
+}
+function bgChips() {
+  const el = $('bgChips'); if (!el) return;
+  el.innerHTML = BGI.map((g, i) => `<div class="bgw"><span class="bgt${SET.useImg ? ' on' : ''}" data-i="${i}" title="استخدم الصور" style="background:url('${g.out}') center/cover"><b style="color:${g.fg}">أبجد</b><button data-x="${i}" title="شيل الصورة">×</button></span>`
+      + `<div class="bgfg"><span>لون الكلام</span><input type="color" data-fg="${i}" value="${g.fg}" title="لون الكلام على الصورة دي"><button data-auto="${i}" class="${g.fgSet ? '' : 'on'}" title="البرنامج بيختار لون الكلام لوحده على حسب الصورة">${g.fgSet ? '' : '✓ '}تلقائي</button></div></div>`).join('')
+    + (BGI.length < 2 ? `<button class="bgadd" id="bgAdd">+ ${BGI.length ? 'صورة تانية' : 'صورة'}</button>` : '');
+  $('bgDimRow').style.display = BGI.length ? '' : 'none';
+  if ($('bgAdd')) $('bgAdd').onclick = bgPick;
+  el.querySelectorAll('.bgt').forEach(t => t.onclick = e => { if (e.target.dataset.x != null) return; SET.useImg = true; relook(); bgChips(); });
+  el.querySelectorAll('[data-fg]').forEach(c => { c.oninput = () => { const g = BGI[+c.dataset.fg]; g.fg = c.value; g.fgSet = true; SET.useImg = true; relook(); const t = c.closest('.bgw').querySelector('.bgt b'); if (t) t.style.color = c.value; }; c.onchange = () => { saveBGI(); bgChips(); }; });
+  el.querySelectorAll('[data-auto]').forEach(b => b.onclick = () => { const g = BGI[+b.dataset.auto]; g.fgSet = false; g.fg = g.fgAuto || g.fg; saveBGI(); relook(); bgChips(); });
+  el.querySelectorAll('[data-x]').forEach(b => b.onclick = e => { e.stopPropagation(); BGI.splice(+b.dataset.x, 1); saveBGI(); if (!BGI.length) SET.useImg = false; relook(); bgChips(); });
+  document.querySelectorAll('[data-pair]').forEach(b => b.classList.toggle('on', !SET.useImg && b.dataset.pair === SET.pair));
+}
 function hymnSlides(num) {
   const h = H[num - 1];
   return h.slides.map((s, i) => ({
@@ -37,7 +109,7 @@ function hymnSlides(num) {
 function chapterSlides(b, c) {
   return B[b].chapters[c].map((t, v) => ({ theme: 'bible', bg: '#111111', fg: '#ffffff', seed: b * 1000 + c * 50 + v, html: `${esc(t)}<div class="r">${ref(b, c, v)}</div>`, lab: 'آية ' + arD(v + 1), ref: ref(b, c, v) }));
 }
-function decoOf(s) { return s && !s.end ? DECO.svg(SET.design, s.seed || 0, s.bg) : ''; }
+function decoOf(s) { return s && !s.end && !s.img ? DECO.svg(SET.design, s.seed || 0, s.bg) : ''; }
 function paint(el, s) {
   el.classList.remove('th-w', 'th-b', 'th-bible', 'th-h'); el.style.background = ''; el.style.color = '';
   if (!s) { el.innerHTML = ''; return; }
@@ -77,6 +149,7 @@ function showStory(num) {
 function openAt(p, label) {
   if (!p) { toast('مش لاقي الشاهد ده'); return; }
   if (st.cur && st.cur.kind === 'hymn') st.back = { num: st.cur.num, cue: st.cue, tab: st.tab, q: $('q').value, story: label };
+  st.sug = { b: p.b, c: p.c, v: p.v, v2: p.v2 };    // these verses stay highlighted (like the mobile app)
   setTab('bible'); browseChapters(p.b); loadChapter(p.b, p.c, p.v);
   const n = $('slides').children[p.v]; if (n) n.scrollIntoView({ block: 'start' });
 }
@@ -110,6 +183,7 @@ function loadHymn(num, cueIdx, hit) {
   renderSlides(); setCue(cueIdx || 0);
 }
 function loadChapter(b, c, v) {
+  if (st.sug && (st.sug.b !== b || st.sug.c !== c)) st.sug = null;
   st.cur = { kind: 'bible', b, c }; st.slides = chapterSlides(b, c);
   $('curTitle').innerHTML = `<span class="hl">${bookName(b)} ${arD(c + 1)}</span>` + (st.back ? `<button class="btn backbtn" id="backBtn"><svg class="ic"><use href="#i-prev"/></svg>رجوع للترنيمة: ${esc(hName(st.back.num))}</button>` : '');
   if (st.back) $('backBtn').onclick = goBack;
@@ -126,6 +200,7 @@ function renderSlides() {
     d.innerHTML = (s.end ? '' : decoOf(s)) + `<span class="lab">${s.lab}</span><div class="tx">${s.html}</div>`;
     d.title = 'ضغطة = جهّزها (ولو الترنيمة معروضة تظهر على طول) · ضغطتين = اعرضها';
     if (st.cur && st.cur.kind === 'hymn' && i === st.hit) d.classList.add('hit');
+    if (st.cur && st.cur.kind === 'bible' && st.sug && st.sug.b === st.cur.b && st.sug.c === st.cur.c && i >= st.sug.v && i <= st.sug.v2) d.classList.add('sug');
     d.onclick = () => pick(i);
     d.ondblclick = () => { setCue(i); play(); };
     el.appendChild(d);
@@ -216,7 +291,7 @@ function applySet() {
   for (const d of [document, st.out && !st.out.closed ? st.out.document : null]) if (d) { d.documentElement.style.setProperty('--f', `"${SET.font}"`); d.documentElement.style.setProperty('--fb', `"${SET.fontB}"`); d.documentElement.style.setProperty('--s', SET.scale); }
   $('fprev').style.fontFamily = `"${SET.font}"`; $('fbprev').style.fontFamily = `"${SET.fontB}"`;
   $('fontSel').value = SET.font; $('fontBSel').value = SET.fontB; $('szVal').textContent = Math.round(SET.scale * 100) + '%';
-  document.querySelectorAll('[data-pair]').forEach(b => b.classList.toggle('on', b.dataset.pair === SET.pair));
+  document.querySelectorAll('[data-pair]').forEach(b => b.classList.toggle('on', !(SET.useImg && BGI.length) && b.dataset.pair === SET.pair));
   document.querySelectorAll('[data-design]').forEach(b => b.classList.toggle('on', b.dataset.design === SET.design));
   $('c1').value = SET.c1; $('c2').value = SET.c2;
   try { localStorage.setItem('ss_set2', JSON.stringify(SET)); } catch (e) {}
@@ -232,10 +307,12 @@ $('fontBSel').onchange = e => { SET.fontB = e.target.value; applySet(); };
 // colour pairs + designs (buttons are built here)
 $('pairChips').innerHTML = DECO.PAIRS.map(p => `<button data-pair="${p.id}"><i style="background:${p.a}"></i><i style="background:${p.b}"></i>${p.name}</button>`).join('');
 $('designChips').innerHTML = DECO.DESIGNS.map(d => `<button data-design="${d.id}">${d.name}</button>`).join('');
-document.querySelectorAll('[data-pair]').forEach(b => b.onclick = () => { SET.pair = b.dataset.pair; relook(); });
+document.querySelectorAll('[data-pair]').forEach(b => b.onclick = () => { SET.pair = b.dataset.pair; SET.useImg = false; relook(); bgChips(); });
+$('bgDk').onclick = () => bgDim(0.1); $('bgLt').onclick = () => bgDim(-0.1);
+bgChips();
 document.querySelectorAll('[data-design]').forEach(b => b.onclick = () => { SET.design = b.dataset.design; relook(); });
-$('c1').oninput = e => { SET.c1 = e.target.value; SET.pair = 'custom'; relook(); };
-$('c2').oninput = e => { SET.c2 = e.target.value; SET.pair = 'custom'; relook(); };
+$('c1').oninput = e => { SET.c1 = e.target.value; SET.pair = 'custom'; SET.useImg = false; relook(); bgChips(); };
+$('c2').oninput = e => { SET.c2 = e.target.value; SET.pair = 'custom'; SET.useImg = false; relook(); bgChips(); };
 $('fillBtn').onclick = () => { SET.fill = SET.fill === false; applySet(); toast(SET.fill ? 'الكلام هيكبر لحد ما يملا الشاشة' : 'الكلام بالحجم العادي'); };
 $('storyBtn').onclick = () => { SET.story = SET.story === false; applySet(); if (st.cur && st.cur.kind === 'hymn') showStory(st.cur.num); toast(SET.story ? 'القصة المقترحة ظاهرة تحت كل ترنيمة' : 'القصة المقترحة اتقفلت'); };
 $('szUp').onclick = () => { SET.scale = Math.min(1.6, +(SET.scale + 0.1).toFixed(1)); applySet(); };
@@ -438,7 +515,58 @@ function listItems(m) {
   if (!m.items.length) { empty('<b>🌱</b>لسه مفيش حاجة اتعرضت النهارده'); return; }
   m.items.forEach(it => { const [t, s] = itemLabel(it); const d = item('', t, s, () => openItem(it)); const w = document.createElement('span'); w.className = 'when'; w.textContent = timeOf(it.t); d.appendChild(w); });
 }
+// ---------- «فرصة» prepared on the mobile web app («فرصي»), opened here from the file the servant sends himself ----------
+let PLAN = null;
+try { PLAN = JSON.parse(localStorage.getItem('ss_plan') || 'null'); } catch (e) {}
+const savePlan = () => { try { if (PLAN) localStorage.setItem('ss_plan', JSON.stringify(PLAN)); else localStorage.removeItem('ss_plan'); } catch (e) {} };
+const MON_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+const planDate = s => { const [y, m, d] = String(s || '').split('-').map(Number); return y ? arD(d) + ' ' + MON_AR[m - 1] + ' ' + arD(y) : ''; };
+const planName = f => f.title || 'فرصة ' + planDate(f.date);
+function planPick() {
+  let inp = $('planFile');
+  if (!inp) { inp = document.createElement('input'); inp.type = 'file'; inp.id = 'planFile'; inp.accept = '.json,application/json'; inp.style.display = 'none'; document.body.appendChild(inp); inp.onchange = () => { if (inp.files[0]) planFromFile(inp.files[0]); inp.value = ''; }; }
+  inp.click();
+}
+async function planFromFile(file) {
+  let list = null;
+  try { const d = JSON.parse(await file.text()); if (d && d.app === 'ssw-forsa' && Array.isArray(d.forsas)) list = d.forsas.filter(f => f && Array.isArray(f.items)); } catch (e) {}
+  if (!list || !list.length) { toast('الملف ده مش فرصة من «فرصي» على الموبايل'); return; }
+  setTab('today');
+  if (list.length === 1) { planUse(list[0]); return; }
+  // a full backup: choose which فرصة (the next one first)
+  const t = todayId(), sorted = list.slice().sort((a, b) => (a.date >= t) !== (b.date >= t) ? (a.date >= t ? -1 : 1) : a.date >= t ? (a.date > b.date ? 1 : -1) : (a.date < b.date ? 1 : -1));
+  $('results').innerHTML = ''; crumb([{ t: 'النهارده', fn: () => search() }, { t: 'اختار الفرصة' }]);
+  sorted.forEach(f => item('', planName(f), planDate(f.date) + (f.place ? ' · ' + f.place : '') + ' · ' + f.items.length + (f.items.length === 1 ? ' حاجة' : ' حاجات'), () => planUse(f)));
+}
+function planUse(f) { PLAN = f; st.planSel = null; savePlan(); setTab('today'); search(); toast('الفرصة جاهزة: ' + planName(f)); }
+function planOpen(it, i) {
+  st.planSel = i;
+  if (it.t === 'h') { const n = hymnOf({ title: it.title, num: it.n }); if (n) loadHymn(n, 0); else toast('الترنيمة دي مش لاقيها'); }
+  else if (B[it.b] && B[it.b].chapters[it.c]) {   // stay on «النهارده» so the next item is one click away
+    st.sug = { b: it.b, c: it.c, v: it.v, v2: it.v2 != null ? it.v2 : it.v }; st.back = null;
+    loadChapter(it.b, it.c, it.v); const n = $('slides').children[it.v]; if (n) n.scrollIntoView({ block: 'start' });
+  }
+}
+function showPlan() {
+  const f = PLAN, box = document.createElement('div'); box.className = 'plan';
+  box.innerHTML = `<div class="plan-h"><span class="hl">الفرصة اللي اتحضّرت</span> <b>${esc(planName(f))}</b><small>${esc(planDate(f.date))}${f.place ? ' · ' + esc(f.place) : ''}</small><button class="btn plan-x" title="شيل الفرصة دي">شيلها</button></div>`;
+  $('results').appendChild(box);
+  box.querySelector('.plan-x').onclick = () => { PLAN = null; st.planSel = null; savePlan(); search(); };
+  f.items.forEach((it, i) => {
+    let t, s;
+    if (it.t === 'h') { const n = hymnOf({ title: it.title, num: it.n }); t = n ? H[n - 1].title : (it.title || 'ترنيمة'); s = 'ترنيمة'; }
+    else { const v2 = it.v2 != null ? it.v2 : it.v; t = B[it.b] ? ref(it.b, it.c, it.v) + (v2 > it.v ? '–' + arD(v2 + 1) : '') : 'شاهد'; s = B[it.b] && B[it.b].chapters[it.c] ? String(B[it.b].chapters[it.c][it.v] || '').replace(/[\u064B-\u0652\u0670]/g, '').slice(0, 70) : ''; }
+    const d = item(arD(i + 1), t, s, () => planOpen(it, i)); d.classList.add('plan-it'); if (st.planSel === i) d.classList.add('sel');
+    if (it.note) { const n = document.createElement('div'); n.className = 'plan-n'; n.textContent = it.note; d.querySelector('div:last-child').appendChild(n); }
+  });
+  if (f.note) { const n = document.createElement('div'); n.className = 'plan-note'; n.innerHTML = `<b>ملاحظاتك:</b> ${esc(f.note).replace(/\n/g, '<br>')}`; $('results').appendChild(n); }
+}
+// drop the file on the window = open it
+document.addEventListener('dragover', e => { if (e.dataTransfer && [...e.dataTransfer.items].some(x => x.kind === 'file')) e.preventDefault(); });
+document.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files[0]; if (f && /\.json$/i.test(f.name)) { e.preventDefault(); planFromFile(f); } });
 function showToday() {
+  if (PLAN) showPlan();
+  else { const o = document.createElement('button'); o.className = 'plan-open'; o.innerHTML = '<b>عندك فرصة محضّرها على الموبايل؟</b> افتح الملف اللي بعته لنفسك من «فرصي» (أو اسحبه هنا)'; o.onclick = planPick; $('results').appendChild(o); }
   const m = curMeeting(), head = document.createElement('div'); head.className = 'meethead';
   head.innerHTML = `<b>${esc(m.title)}</b>`;
   const nb = document.createElement('button'); nb.className = 'btn'; nb.textContent = 'خدمة جديدة';
@@ -491,8 +619,12 @@ function onKey(e) {
   if (isB(e)) { e.preventDefault(); blank(); return; }          // B (also "لا" on the Arabic keyboard)
   // typing anywhere goes straight into the search box
   if ((st.tab === 'hymns' || st.tab === 'bible') && e.key.length === 1 && e.code !== 'Space') { $('q').value = ''; $('q').focus(); return; }
-  // verses: ↓ ↑ walk the list, Enter shows the verse
-  if (st.cur && st.cur.kind === 'bible' && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); setCue((onAir() ? st.live : st.cue) + (e.key === 'ArrowDown' ? 1 : -1)); return; }
+  // verses: ↓ ↑ flip like ← → (on the screen = the next verse shows right away), and the list follows
+  if (st.cur && st.cur.kind === 'bible' && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    e.preventDefault(); step(e.key === 'ArrowDown' ? 1 : -1);
+    const n = $('slides').children[st.cue]; if (n) n.scrollIntoView({ block: 'nearest' });
+    return;
+  }
   if (e.key === 'Enter' && st.cur) { e.preventDefault(); play(); return; }
   if (e.code === 'Space') { e.preventDefault(); play(); }
   else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown' || e.key === 'PageDown') { e.preventDefault(); step(1); }
@@ -538,9 +670,13 @@ if (APP && window.bp.on) window.bp.on('update', u => {
     b.onclick = () => { if (confirm('البرنامج هيتقفل ويفتح تاني بالنسخة الجديدة. تمام؟')) window.bp.updateNow(); };
   }
 });
-// suggestions / mistakes go to the church's Facebook page (Messenger)
-const SUGGEST_URL = 'https://m.me/61578584879222';
-function suggest() { if (APP && window.bp.openLink) window.bp.openLink(SUGGEST_URL); else window.open(SUGGEST_URL, '_blank'); }
+// suggestions / mistakes / a hymn to add go to WhatsApp (the hymn on screen is written in the message)
+const WA = 'https://wa.me/201227120955';
+function suggest() {
+  const h = st.cur && st.cur.kind === 'hymn' && H[st.cur.num - 1] ? H[st.cur.num - 1].title : '';
+  const url = WA + '?text=' + encodeURIComponent(h ? 'ترنيمة: ' + h + '\n' : 'برنامج ترانيم مدارس الأحد:\n');
+  if (APP && window.bp.openLink) window.bp.openLink(url); else window.open(url, '_blank');
+}
 $('sugBtn').onclick = suggest;
 if (APP && window.bp.on) window.bp.on('content', c => {
   const b = $('dataBtn'); b.style.display = ''; b.textContent = '✨ ترانيم جديدة — اعرضها';
@@ -550,6 +686,7 @@ if (APP && window.bp.on) window.bp.on('content', c => {
 });
 // "what's new" after an update: shown once per new version, never on a first install
 const WHATSNEW = {
+  '1.0.13': ['«الشكل والخط»: تقدر تحط صورة في خلفية الترانيم (أو صورتين يتبادلوا زي اللونين) — البرنامج بيغمّقها ويعملها blur عشان الكلام يبان، ويختار لون الكلام لوحده (وتقدر تغيّره تحت كل صورة). الصور بتتحفظ على الجهاز ده بس.', '«ابعت اقتراح» بقى بيفتح واتساب على طول — ابعت أي غلطة، أو ترنيمة ناقصة (ابعت كلامها مكتوب أو ملف PowerPoint).', '«النهارده»: افتح الفرصة اللي حضّرتها على الموبايل في «فرصي» — ابعت الملف لنفسك واتساب وافتحه هنا، وتلاقي الترانيم والشواهد بالترتيب وملاحظاتك.', 'لما تفتح آية أو قصة من الترنيمة، الآيات المقترحة بتبقى متعلّم عليها بالأصفر في الكتاب المقدس.', 'في الكتاب المقدس الأسهم فوق وتحت بتقلّب الآيات زي الأسهم يمين وشمال، ولو الآية معروضة اللي بعدها بتظهر على طول.'],
   '1.0.12': [
     'بعد أي تحديث بتظهرلك رسالة لوحدها: «ترنيمة جديدة اتضافت» وتقدر تفتحها منها على طول، أو «الترانيم اتحدّثت»، أو «البرنامج اتحدّث».'
   ],
@@ -575,7 +712,7 @@ const WHATSNEW = {
     'تحديث البرنامج نفسه بقى بيتسطّب في الخلفية من غير شاشة تسطيب.'
   ],
   '1.0.5': [
-    'زرار جديد فوق: <b>ابعت اقتراح</b> — لو لقيت غلطة في ترنيمة أو عندك فكرة، ابعتها على طول لصفحة مدرسة الأحد – كنيسة الإخوة راغب على فيسبوك.',
+    'زرار جديد فوق: <b>ابعت اقتراح</b> — لو لقيت غلطة في ترنيمة أو عندك فكرة، ابعتها على طول واتساب.',
     'الشاشة دي هتظهرلك بعد كل تحديث عشان تعرف الجديد في البرنامج.'
   ]
 };

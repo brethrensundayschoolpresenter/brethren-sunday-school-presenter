@@ -184,7 +184,7 @@ function startUpdates() {
   setInterval(check, 6 * 60 * 60 * 1000);
 }
 // links the app may open in the browser: only the church's Facebook page / Messenger
-ipcMain.on('open-link', (e, u) => { if (/^https:\/\/(m\.me|www\.facebook\.com|www\.messenger\.com)\//.test(String(u))) shell.openExternal(u); });
+ipcMain.on('open-link', (e, u) => { if (/^https:\/\/(wa\.me|api\.whatsapp\.com|m\.me|www\.facebook\.com|www\.messenger\.com)\//.test(String(u))) shell.openExternal(u); });
 ipcMain.handle('app-version', () => app.getVersion());
 ipcMain.on('update-now', () => { try { require('electron-updater').autoUpdater.quitAndInstall(true, true); } catch (e) {} });
 
