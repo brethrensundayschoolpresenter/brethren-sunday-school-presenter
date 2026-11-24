@@ -1,7 +1,7 @@
 {
   "name": "brethren-sunday-school-presenter",
   "productName": "Brethren Sunday School Presenter",
-  "version": "1.0.15",
+  "version": "1.0.16",
   "description": "Brethren Sunday School Presenter - hymns and Bible for Sunday school",
   "main": "main.js",
   "author": "Ovia Media Production",
@@ -62,7 +62,26 @@
         "repo": "brethren-sunday-school-presenter",
         "releaseType": "release"
       }
-    ]
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "icon": "build/icon.icns",
+      "category": "public.app-category.education",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "artifactName": "Brethren-Sunday-School-Presenter-Mac-${version}.${ext}",
+      "title": "Brethren Sunday School Presenter"
+    }
   },
   "dependencies": {
     "electron-updater": "^6.8.11"

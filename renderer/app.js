@@ -674,6 +674,10 @@ if (APP && window.bp.on) window.bp.on('update', u => {
     const b = $('updBtn'); b.style.display = ''; b.textContent = 'نسخة جديدة جاهزة — حدّث';
     b.onclick = () => { if (confirm('البرنامج هيتقفل ويفتح تاني بالنسخة الجديدة. تمام؟')) window.bp.updateNow(); };
   }
+  if (u.state === 'mac') {   // Mac: no self-update (not signed by Apple) — download the new copy from the site
+    const b = $('updBtn'); b.style.display = ''; b.textContent = 'نسخة جديدة — نزّلها';
+    b.onclick = () => window.bp.openLink('https://brethrensundayschoolpresenter.github.io/#mac');
+  }
 });
 // suggestions / mistakes / a hymn to add go to WhatsApp (the hymn on screen is written in the message)
 const WA = 'https://wa.me/201227120955';

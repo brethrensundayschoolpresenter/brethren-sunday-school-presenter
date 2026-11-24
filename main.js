@@ -183,8 +183,25 @@ function startUpdates() {
   setTimeout(check, 8000);
   setInterval(check, 6 * 60 * 60 * 1000);
 }
-// links the app may open in the browser: only the church's Facebook page / Messenger
-ipcMain.on('open-link', (e, u) => { if (/^https:\/\/(wa\.me|api\.whatsapp\.com|m\.me|www\.facebook\.com|www\.messenger\.com)\//.test(String(u))) shell.openExternal(u); });
+// Mac copies are not signed by Apple, so they can't update themselves: tell the servant and send him to the download page
+function startMacUpdateCheck() {
+  if (!app.isPackaged || process.platform !== 'darwin') return;
+  const newer = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
+  const check = async () => {
+    try {
+      const r = JSON.parse((await getBuffer('https://api.github.com/repos/brethrensundayschoolpresenter/brethren-sunday-school-presenter/releases/latest')).toString('utf8'));
+      const v = String(r.tag_name || '').replace(/^v/, '');
+      if (v && newer(v, app.getVersion()) && (r.assets || []).some(x => /-Mac-/.test(x.name))) {
+        logLine('UPDATE mac available ' + v);
+        if (control && !control.isDestroyed()) control.webContents.send('update', { state: 'mac', version: v });
+      }
+    } catch (e) { logLine('UPDATE mac check failed ' + e.message); }
+  };
+  setTimeout(check, 8000);
+  setInterval(check, 6 * 60 * 60 * 1000);
+}
+// links the app may open in the browser: WhatsApp / the church's Facebook page / Messenger / our download page
+ipcMain.on('open-link', (e, u) => { if (/^https:\/\/(wa\.me|api\.whatsapp\.com|m\.me|www\.facebook\.com|www\.messenger\.com|brethrensundayschoolpresenter\.github\.io)\//.test(String(u))) shell.openExternal(u); });
 ipcMain.handle('app-version', () => app.getVersion());
 ipcMain.on('update-now', () => { try { require('electron-updater').autoUpdater.quitAndInstall(true, true); } catch (e) {} });
 
@@ -200,7 +217,7 @@ app.whenReady().then(() => {
     ]));
   } else Menu.setApplicationMenu(null);
   createControl();
-  startUpdates();
+  startUpdates(); startMacUpdateCheck();
   if (app.isPackaged || process.env.SS_CONTENT_TEST) { setTimeout(checkContent, 12000); setInterval(checkContent, 3 * 60 * 60 * 1000); }
   screen.on('display-added', () => { if (output && !output.isDestroyed()) placeOutput(); else openOutput(false); });
   screen.on('display-removed', () => { placeOutput(); });
