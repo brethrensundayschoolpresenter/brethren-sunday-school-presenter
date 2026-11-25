@@ -9,6 +9,7 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'bp', privileges: { standard: tr
 
 const RENDERER = path.join(__dirname, 'renderer');
 let control = null, output = null, lastSlide = null, lastStyle = null;
+const SMOKE = process.env.SS_SMOKE || '';
 // debug log next to the app (…/dist/logs/speech-YYYY-MM-DD.log) so problems can be read later
 let LOGDIR = null;
 function logLine(msg) {
@@ -217,13 +218,49 @@ app.whenReady().then(() => {
     ]));
   } else Menu.setApplicationMenu(null);
   createControl();
+  if (SMOKE) return startSmoke();   // release test on GitHub only (never set on users' machines)
   startUpdates(); startMacUpdateCheck();
   if (app.isPackaged || process.env.SS_CONTENT_TEST) { setTimeout(checkContent, 12000); setInterval(checkContent, 3 * 60 * 60 * 1000); }
   screen.on('display-added', () => { if (output && !output.isDestroyed()) placeOutput(); else openOutput(false); });
   screen.on('display-removed', () => { placeOutput(); });
   screen.on('display-metrics-changed', () => placeOutput());
 });
-app.on('window-all-closed', () => app.quit());
+app.on('window-all-closed', () => { if (!SMOKE) app.quit(); });
+
+// SMOKE TEST — only when the release workflow sets SS_SMOKE=<result file>. Opens the real app, checks that the
+// control + projector windows load with all the hymns and no crash, writes the result and quits.
+// If it fails, the release is NOT published, so no user ever gets a broken version.
+function startSmoke() {
+  const out = process.env.SS_SMOKE, errors = [];
+  let done = false;
+  const finish = (ok, info) => {
+    if (done) return; done = true;
+    try { fs.writeFileSync(out, JSON.stringify({ ok, version: app.getVersion(), electron: process.versions.electron, info, errors }, null, 1)); } catch (e) {}
+    app.exit(ok ? 0 : 1);
+  };
+  setTimeout(() => finish(false, 'timeout'), 90000);
+  const watch = (w, name) => {
+    w.webContents.on('render-process-gone', (e, d) => finish(false, name + ' crashed: ' + (d && d.reason)));
+    w.webContents.on('console-message', (...a) => { const m = a[0] && a[0].message !== undefined ? a[0] : { level: a[1], message: a[2] };
+      if (/uncaught|is not defined|is not a function|cannot read/i.test(String(m.message))) errors.push(name + ': ' + m.message); });
+    w.webContents.on('did-fail-load', (e, code, desc) => finish(false, name + ' failed to load: ' + desc));
+  };
+  watch(control, 'control');
+  control.webContents.once('did-finish-load', () => setTimeout(async () => {
+    try {
+      const r = await control.webContents.executeJavaScript(`({ hymns: (window.HYMNS || []).length, topics: (window.TOPICS || []).length,
+        stories: Object.keys(window.STORIES || {}).length, books: (window.BOOKS || []).length,
+        search: !!document.querySelector('input'), body: document.body.innerText.length })`);
+      if (!output || output.isDestroyed()) openOutput(true);   // open the projector window even with no projector
+      if (output && !output.isDestroyed()) watch(output, 'output');
+      const outOk = await new Promise(res => { if (!output) return res(false); const t = setTimeout(() => res(!output.webContents.isLoading()), 8000);
+        output.webContents.once('did-finish-load', () => { clearTimeout(t); res(true); }); if (!output.webContents.isLoading()) { clearTimeout(t); res(true); } });
+      await new Promise(res => setTimeout(res, 2000));
+      const ok = r.hymns > 900 && r.topics > 0 && r.stories > 0 && r.search && r.body > 100 && outOk && !errors.length;
+      finish(ok, Object.assign(r, { output: outOk }));
+    } catch (e) { finish(false, 'check failed: ' + e.message); }
+  }, 5000));
+}
 
 ipcMain.on('slide', (e, s) => { lastSlide = s; if (output && !output.isDestroyed()) output.webContents.send('slide', s); });
 ipcMain.on('style', (e, s) => { lastStyle = s; if (output && !output.isDestroyed()) output.webContents.send('style', s); });

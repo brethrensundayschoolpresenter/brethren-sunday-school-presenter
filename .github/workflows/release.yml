@@ -1,6 +1,11 @@
 name: Build Windows + Mac release
 on:
   workflow_dispatch:
+    inputs:
+      test_only:
+        description: 'Build + test only, do NOT publish'
+        type: boolean
+        default: false
 permissions:
   contents: write
 jobs:
@@ -16,7 +21,22 @@ jobs:
       - run: npx electron-builder --win nsis --x64 --publish never
       # Windows 7 / 8 (Electron 22, 32 + 64-bit in one installer) -> win7.yml
       - run: npx electron-builder --win nsis --ia32 --x64 --publish never --config build/legacy.js
-      - name: Publish the release
+      # SAFETY: open the real built app (Win 10/11 and Win 7/8 builds) and check it loads everything with no crash.
+      # If a test fails the job stops here and NOTHING is published, so no user gets a broken version.
+      - name: Test the Windows 10/11 app
+        shell: bash
+        run: |
+          SS_SMOKE="$PWD/smoke-win.json" timeout 150 "dist/win-unpacked/Brethren Sunday School Presenter.exe" || true
+          cat smoke-win.json
+          node -e "process.exit(require('./smoke-win.json').ok === true ? 0 : 1)"
+      - name: Test the Windows 7/8 app (Electron 22)
+        shell: bash
+        run: |
+          SS_SMOKE="$PWD/smoke-win7.json" timeout 150 "dist-legacy/win-unpacked/Brethren Sunday School Presenter.exe" || true
+          cat smoke-win7.json
+          node -e "process.exit(require('./smoke-win7.json').ok === true ? 0 : 1)"
+      - name: Publish the release as a DRAFT (users can't see it until the Mac test passes too)
+        if: ${{ !inputs.test_only }}
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -24,7 +44,8 @@ jobs:
           V=$(node -p "require('./package.json').version")
           sed "s/{V}/$V/g" build/release-notes.md > notes.md
           ls dist dist-legacy
-          gh release create "v$V" dist/*.exe dist/*.blockmap dist/latest.yml dist-legacy/*.exe dist-legacy/*.blockmap dist-legacy/win7.yml How-to-Install.pdf --title "Brethren Sunday School Presenter - ترانيم مدارس الأحد $V" --notes-file notes.md
+          if [ "$(gh release view "v$V" --json isDraft -q .isDraft 2>/dev/null)" = "true" ]; then gh release delete "v$V" --yes; fi   # leftover draft of a failed run
+          gh release create "v$V" --draft dist/*.exe dist/*.blockmap dist/latest.yml dist-legacy/*.exe dist-legacy/*.blockmap dist-legacy/win7.yml How-to-Install.pdf --title "Brethren Sunday School Presenter - ترانيم مدارس الأحد $V" --notes-file notes.md
   mac:
     # Mac (universal: Apple Silicon + Intel), ad-hoc signed (no Apple account) -> added to the same release
     needs: build
@@ -38,10 +59,20 @@ jobs:
       - run: npx electron-builder --mac dmg --universal --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      - name: Add the Mac copy to the release
+      - name: Test the Mac app
+        run: |
+          APP="$(ls -d dist/mac*/*.app | head -1)"
+          echo "$APP"
+          SS_SMOKE="$PWD/smoke-mac.json" "$APP/Contents/MacOS/Brethren Sunday School Presenter" &
+          P=$!; for i in $(seq 1 150); do kill -0 $P 2>/dev/null || break; sleep 1; done; kill $P 2>/dev/null || true
+          cat smoke-mac.json
+          node -e "process.exit(require('./smoke-mac.json').ok === true ? 0 : 1)"
+      - name: Add the Mac copy and make the release public (only now users get it)
+        if: ${{ !inputs.test_only }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           V=$(node -p "require('./package.json').version")
           ls dist
           gh release upload "v$V" dist/*.dmg --clobber
+          gh release edit "v$V" --draft=false --latest

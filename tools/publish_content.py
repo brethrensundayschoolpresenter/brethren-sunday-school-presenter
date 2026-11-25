@@ -8,14 +8,24 @@
    Desktop apps (1.0.7+) download it within a few hours (on start + every 3 h) and show «✨ ترانيم جديدة»; the notes appear in «الجديد».
    The mobile web app gets it the next time it is opened online, reloads by itself and shows a yellow «الجديد» card with the notes
    (+ «ترنيمة جديدة اتضافت: «...» ‹ افتحها» for new hymns).
-Bump minApp only if the new data needs a newer app."""
-import json, hashlib, sys, os, re, shutil
+Bump minApp only if the new data needs a newer app.
+SAFETY: tools/check_content.js runs first and refuses broken data (add --allow-remove only if hymns were removed on purpose).
+Keys-only publish (keys.js edited by hand in the site): run `node tools/check_content.js --site <site>` and push ONLY if it says SAFE."""
+import json, hashlib, sys, os, re, shutil, subprocess
 args = sys.argv[1:]
 site = None
 if args[:1] == ['--site']:
     site, args = args[1], args[2:]
-d = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'renderer', 'data')
+extra = [a for a in args if a == '--allow-remove']
+args = [a for a in args if a != '--allow-remove']
+here = os.path.dirname(os.path.abspath(__file__))
+CHECK = ['node', os.path.join(here, 'check_content.js')] + extra
+# SAFETY: refuse broken data before anything changes (the app must never break for the users)
+if subprocess.call(CHECK) != 0:
+    sys.exit('REFUSED: nothing was published.')
+d = os.path.join(here, '..', 'renderer', 'data')
 p = os.path.join(d, 'content.json')
+original_content = open(p, encoding='utf8').read()
 c = json.load(open(p, encoding='utf8'))
 c['dataVersion'] = int(c.get('dataVersion', 0)) + 1
 FILES = ['hymns.js', 'topics.js', 'stories.js']
@@ -31,4 +41,8 @@ if site:
     s = open(ap, encoding='utf8').read()
     s = re.sub(r'const DATA_VERSION = \d+;', 'const DATA_VERSION = %d;' % c['dataVersion'], s)
     open(ap, 'w', encoding='utf8').write(s)
+    if subprocess.call(CHECK + ['--site', site]) != 0:   # mobile data (+ keys.js, bible.js) must pass too, else undo everything
+        subprocess.call(['git', '-C', site, 'checkout', '--', 'app/data', 'app/app.js'])
+        open(p, 'w', encoding='utf8').write(original_content)
+        sys.exit('REFUSED: site + content.json restored, nothing was published.')
     print('site updated:', sd, 'DATA_VERSION', c['dataVersion'])
