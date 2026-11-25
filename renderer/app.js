@@ -225,13 +225,15 @@ function step(d) {
   else setCue(st.cue + d);
 }
 function pick(i) { setCue(i); if (onAir()) play(); }
+// how to get a second screen, per system (Mac has no ويندوز + P)
+const EXTEND_TIP = window.bp && window.bp.platform === 'darwin' ? 'وصّل البروجكتور واعمل Extend من System Settings › Displays، وشاشة العرض هتفتح عليه لوحدها' : 'وصّل البروجكتور واعمل Extend (ويندوز + P) وشاشة العرض هتفتح عليه لوحدها';
 function play() {
   if (st.cue < 0 || !st.slides[st.cue]) { toast('اختار حاجة الأول'); return; }
   const s = st.slides[st.cue];
   st.live = st.cue; st.liveKey = key(); st.liveSlide = s; st.blank = false; $('blankBtn').classList.remove('on');
   paint($('liveScr'), s); $('liveRef').textContent = s.ref;
   sendOut(s); mark(); record(s); window._lastShown = s.ref;
-  if (!outputReady()) toast('اتعرضت هنا بس — وصّل البروجكتور واعمل Extend (ويندوز + P) وشاشة العرض هتفتح عليه لوحدها');
+  if (!outputReady() && !play.told) { play.told = true; toast('اتعرضت هنا بس — ' + EXTEND_TIP); }   // once per session (people rehearse with no projector)
   if (st.cue + 1 < st.slides.length) setCue(st.cue + 1);
 }
 function blank() {
@@ -277,7 +279,7 @@ if (APP) {
     outOpen = s.outputOpen;
     // the projector screen opens by itself when a projector is connected (Extend); without one this button only opens a test window
     $('outLbl').textContent = s.outputOpen ? (s.projector ? 'شغالة على البروجكتور' : 'شاشة التجربة مفتوحة') : (s.projector ? 'افتح على البروجكتور' : 'تجربة شاشة العرض');
-    $('openOut').title = s.projector ? 'شاشة العرض بتفتح على البروجكتور لوحدها' : 'مفيش بروجكتور متوصل — الزرار ده بيفتح شاشة تجربة. لما توصّل البروجكتور واعمل Extend (ويندوز + P) شاشة العرض هتفتح عليه لوحدها';
+    $('openOut').title = s.projector ? 'شاشة العرض بتفتح على البروجكتور لوحدها' : 'مفيش بروجكتور متوصل — الزرار ده بيفتح شاشة تجربة. لما توصّل البروجكتور واعمل Extend ' + (window.bp.platform === 'darwin' ? 'من System Settings › Displays' : '(ويندوز + P)') + ' شاشة العرض هتفتح عليه لوحدها';
     $('openOut').classList.toggle('primary', !s.outputOpen);
   });
   window.bp.on('key', k => onKey({ key: k.key, code: k.code, target: document.body, preventDefault() {} }));
@@ -691,6 +693,8 @@ if (APP && window.bp.on) window.bp.on('content', c => {
   const b = $('dataBtn'); b.style.display = ''; b.textContent = '✨ ترانيم جديدة — اعرضها';
   b.title = (c.notes || []).map(x => x.replace(/<[^>]+>/g, '')).join('\n');
   b.onclick = () => { if (window.bp.reloadFresh) window.bp.reloadFresh(); else location.reload(); };
+  // nothing shown on the screen since the app opened -> take the new hymns right away (no button needed)
+  if (st.live < 0 && !document.querySelector('.modal.open, dialog[open]')) { setTimeout(() => { if (st.live < 0) b.onclick(); }, 1500); return; }
   toast('وصل تحديث للترانيم ✨ — دوس الزرار الأصفر فوق، أو هيظهر لوحده المرة الجاية');
 });
 // "what's new" after an update: shown once per new version, never on a first install
@@ -701,7 +705,7 @@ const WHATSNEW = {
     'بعد أي تحديث بتظهرلك رسالة لوحدها: «ترنيمة جديدة اتضافت» وتقدر تفتحها منها على طول، أو «الترانيم اتحدّثت»، أو «البرنامج اتحدّث».'
   ],
   '1.0.11': [
-    'شاشة العرض بتفتح على البروجكتور لوحدها أول ما توصّله وتعمل Extend (ويندوز + P)، ومش محتاج تدوس حاجة.',
+    (window.bp && window.bp.platform === 'darwin' ? 'شاشة العرض بتفتح على البروجكتور لوحدها أول ما توصّله وتعمل Extend من System Settings › Displays، ومش محتاج تدوس حاجة.' : 'شاشة العرض بتفتح على البروجكتور لوحدها أول ما توصّله وتعمل Extend (ويندوز + P)، ومش محتاج تدوس حاجة.'),
     'الزرار اللي فوق بقى بيقولك حالتها: «شغالة على البروجكتور»، ولو مفيش بروجكتور اسمه «تجربة شاشة العرض».'
   ],
   '1.0.10': [
