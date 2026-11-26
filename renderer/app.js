@@ -1,6 +1,7 @@
 // Sunday School Presenter (kids) — control logic (forked from Brethren Presenter v27, no mic)
 const H = window.HYMNS, B = window.BIBLE, BK = window.BOOKS;
-KE.build(H, B, BK);
+const HV = H.filter(h => !h.x);   // hidden hymns ("x":1) stay in the data so numbers never shift, but are not listed or searched
+KE.build(HV, B, BK);
 const $ = id => document.getElementById(id);
 
 let SET = { font: 'K Baloo', fontB: 'K Naskh', scale: 1, fill: true, pair: 'wblue', c1: '#ffffff', c2: '#bfe3f7', design: 'flowers' };
@@ -390,7 +391,7 @@ function search() {
   if (st.tab === 'topics') { showTopics(); return; }
   if (st.tab === 'hymns') {
     crumb([]);
-    if (!q) { alphaList(H.map(h => h.num)); return; }
+    if (!q) { alphaList(HV.map(h => h.num)); return; }
     // names first, then any piece of the words, then the looser word-by-word match
     const seen = new Set(), tit = KE.searchTitles(q, 15), frag = KE.searchFragments(q, 60), res = KE.searchHymnText(q, 60);
     if (!tit.length && !frag.length && !res.length) { empty('مالقيتش ترنيمة فيها الكلام ده<br>جرّب كلمة تانية'); return; }

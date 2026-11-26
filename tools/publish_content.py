@@ -16,8 +16,8 @@ args = sys.argv[1:]
 site = None
 if args[:1] == ['--site']:
     site, args = args[1], args[2:]
-extra = [a for a in args if a == '--allow-remove']
-args = [a for a in args if a != '--allow-remove']
+extra = [a for a in args if a in ('--allow-remove', '--allow-topic-remove')]
+args = [a for a in args if a not in ('--allow-remove', '--allow-topic-remove')]
 here = os.path.dirname(os.path.abspath(__file__))
 CHECK = ['node', os.path.join(here, 'check_content.js')] + extra
 # SAFETY: refuse broken data before anything changes (the app must never break for the users)

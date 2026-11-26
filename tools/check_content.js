@@ -9,6 +9,7 @@ const fs = require('fs'), path = require('path'), vm = require('vm'), cp = requi
 const args = process.argv.slice(2);
 const site = args.includes('--site') ? args[args.indexOf('--site') + 1] : null;
 const allowRemove = args.includes('--allow-remove');
+const allowTopicRemove = args.includes('--allow-topic-remove');
 const errs = [];
 const bad = m => errs.push(m);
 
@@ -26,6 +27,13 @@ function prevCount(dir) {   // hymn count in the last commit, to catch hymns los
   } catch (e) { return 0; }
 }
 
+function prevTopics(dir) {  // topic names in the last commit
+  try {
+    const top = cp.execSync('git rev-parse --show-toplevel', { cwd: dir, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    const src = cp.execSync('git show HEAD:' + path.relative(top, path.join(dir, 'topics.js')), { cwd: dir, maxBuffer: 64 << 20, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+    const ctx = { window: {} }; vm.runInNewContext(src, ctx); return (ctx.window.TOPICS || []).map(t => t.name);
+  } catch (e) { return []; }
+}
 function checkDir(dir, label, withKeys) {
   const before = errs.length;
   const H = load(path.join(dir, 'hymns.js')).HYMNS;
@@ -33,6 +41,8 @@ function checkDir(dir, label, withKeys) {
   const S = load(path.join(dir, 'stories.js')).STORIES;
   if (!Array.isArray(H) || H.length < 100) { bad(label + ': HYMNS fadya aw na2sa'); return; }
   const nums = new Set();
+  // the apps find a hymn by its place (H[num-1]): every hymn must sit exactly at num-1, or favourites/forsas/Keys open the wrong hymn
+  H.forEach((h, i) => { if (!h || h.num !== i + 1) bad(label + ': tarnema f makan ghalat (makan ' + (i + 1) + ' feeh #' + (h && h.num) + ') — mamnoo3 tetmese7 aw tet7arak tarnema; e3melha "x":1 (mestakhabeya)'); });
   for (const h of H) {
     const n = h && h.num;
     if (!Number.isInteger(n) || n < 1) { bad(label + ': tarnema rakamha ghalat ' + JSON.stringify(n)); continue; }
@@ -47,6 +57,8 @@ function checkDir(dir, label, withKeys) {
   }
   const prev = prevCount(dir);
   if (prev && H.length < prev && !allowRemove) bad(label + ': 3adad el taranem 2al men ' + prev + ' le ' + H.length + ' (law 2asdak zawed --allow-remove)');
+  const prevT = prevTopics(dir);   // a topic lost by mistake (it happened once) is refused
+  if (Array.isArray(T)) for (const pt of prevT) if (!T.some(t => t.name === pt) && !allowTopicRemove) bad(label + ': el mawdoo3 «' + pt + '» ettshal (law 2asdak zawed --allow-topic-remove)');
   if (!Array.isArray(T) || !T.length) bad(label + ': TOPICS fadya');
   else {
     const ids = new Set();
