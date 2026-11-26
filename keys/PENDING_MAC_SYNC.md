@@ -33,3 +33,4 @@ Status «pending» = keys only (the Wednesday Mac-sync task handles those). «pe
 | 2026-11-25 | Beta sswb v7: font buttons back to «خط أصغر / خط أكبر» (Shady: the small «أ−/أ+» weren't clear). | synced 2026-11-25 22:35 (Mac v52) |
 | 2026-11-26 | keys.js published (+145 ~1 -0), site commit b8dbc94 | synced 2026-11-26 |
 | 2026-11-26 | keys.js published (+0 ~12 -0: Am+3/4 → Cm by Wassim, no popup; 1 new Key waits for next batch), site commit a2c2315 | pending |
+| 2026-11-26 | pending-mac: data 27 — stories.js: «مهما كان في قلبي» (819) verse ["اش 44 22","زي السحابة"] added (also in the Mac's stories source so a rebuild keeps it). Copy renderer/data/{stories.js,content.json} to the Mac data/. | pending-mac |
