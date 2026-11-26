@@ -672,7 +672,11 @@ $('nextBtn').onclick = () => step(1);
 $('prevBtn').onclick = () => step(-1);
 // automatic update (Windows): tell the servant quietly, never interrupt the meeting
 if (APP && window.bp.on) window.bp.on('update', u => {
-  if (u.state === 'downloading') toast('في نسخة جديدة من البرنامج بتتنزل…');
+  if (u.state === 'downloading' || u.state === 'progress') {   // a fixed button (not a toast) so the servant knows to leave the app open
+    const b = $('updBtn'); b.style.display = '';
+    b.textContent = 'نسخة جديدة بتتنزل' + (u.percent != null ? ' ' + u.percent + '%' : '…') + ' — سيب البرنامج مفتوح';
+    b.onclick = () => toast('النسخة الجديدة بتتنزل؛ أول ما تخلص الزرار هيقولك «حدّث».');
+  }
   if (u.state === 'ready') {
     const b = $('updBtn'); b.style.display = ''; b.textContent = 'نسخة جديدة جاهزة — حدّث';
     b.onclick = () => { if (confirm('البرنامج هيتقفل ويفتح تاني بالنسخة الجديدة. تمام؟')) window.bp.updateNow(); };

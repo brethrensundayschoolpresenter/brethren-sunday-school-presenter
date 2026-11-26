@@ -178,6 +178,8 @@ function startUpdates() {
   autoUpdater.autoInstallOnAppQuit = true;            // the new version is installed when the app is closed
   const tell = m => { if (control && !control.isDestroyed()) control.webContents.send('update', m); };
   autoUpdater.on('update-available', i => { logLine('UPDATE available ' + i.version); tell({ state: 'downloading', version: i.version }); });
+  let lastPct = -1;
+  autoUpdater.on('download-progress', p => { const pct = Math.floor((p && p.percent) || 0); if (pct !== lastPct) { lastPct = pct; tell({ state: 'progress', percent: pct }); } });
   autoUpdater.on('update-downloaded', i => { logLine('UPDATE ready ' + i.version); tell({ state: 'ready', version: i.version }); });
   autoUpdater.on('error', e => logLine('UPDATE error ' + (e && e.message)));
   const check = () => autoUpdater.checkForUpdates().catch(e => logLine('UPDATE check failed ' + e.message));   // no internet = just try later
@@ -220,7 +222,7 @@ app.whenReady().then(() => {
   createControl();
   if (SMOKE) return startSmoke();   // release test on GitHub only (never set on users' machines)
   startUpdates(); startMacUpdateCheck();
-  if (app.isPackaged || process.env.SS_CONTENT_TEST) { setTimeout(checkContent, 12000); setInterval(checkContent, 3 * 60 * 60 * 1000); }
+  if (app.isPackaged || process.env.SS_CONTENT_TEST) { setTimeout(checkContent, 3000); setInterval(checkContent, 3 * 60 * 60 * 1000); }
   screen.on('display-added', () => { if (output && !output.isDestroyed()) placeOutput(); else openOutput(false); });
   screen.on('display-removed', () => { placeOutput(); });
   screen.on('display-metrics-changed', () => placeOutput());
