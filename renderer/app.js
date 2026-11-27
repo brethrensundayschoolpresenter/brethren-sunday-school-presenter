@@ -419,9 +419,11 @@ function search() {
 // alphabetical list with a highlighted letter for each group (no numbers)
 const firstLetter = t => { const c = KE.norm(t).charAt(0); return /[a-z]/.test(c) ? 'English' : c || '#'; };
 // inside each letter the newest hymns come first (date of their PowerPoint), then A→Z
+const ABC = 'ابتثجحخدذرزسشصضطظعغفقكلمنهوي', LRANK = l => { const i = ABC.indexOf(l); return i < 0 ? (l === 'English' ? 99 : 98) : i; };   // letters in Arabic alphabet order (not by hymn number)
 function alphaList(nums) {
+  nums = nums.filter(n => H[n - 1] && !H[n - 1].x);   // a hidden hymn never shows, even if a topic still has it
   const L0 = n => firstLetter(H[n - 1].title), D0 = n => H[n - 1].d || '';
-  const sorted = nums.slice().sort((a, b) => a - b), order = [...new Set(sorted.map(L0))];
+  const sorted = nums.slice().sort((a, b) => a - b), order = [...new Set(sorted.map(L0))].sort((x, y) => LRANK(x) - LRANK(y));
   sorted.sort((a, b) => order.indexOf(L0(a)) - order.indexOf(L0(b)) || (D0(b) > D0(a) ? 1 : D0(b) < D0(a) ? -1 : a - b));
   let cur = null;
   sorted.forEach(n => {
@@ -448,7 +450,7 @@ function showTopics(open) {
   T.forEach((t, i) => {
     if (!t.nums.length) return;
     if (t.section !== sec) { sec = t.section; const d = document.createElement('div'); d.className = 'letter'; d.innerHTML = `<span>${esc(sec)}</span>`; $('results').appendChild(d); }
-    item('', t.name, arD(t.nums.length) + ' ترنيمة', () => { $('results').innerHTML = ''; showTopics(i); });
+    item('', t.name, arD(t.nums.filter(n => H[n - 1] && !H[n - 1].x).length) + ' ترنيمة', () => { $('results').innerHTML = ''; showTopics(i); });
   });
 }
 // a topic name under the hymn title is a link: opens that topic in the topics tab

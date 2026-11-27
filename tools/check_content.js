@@ -86,6 +86,8 @@ function checkDir(dir, label, withKeys) {
       if (ids.has(t.id)) bad(label + ': topic mokarrar ' + t.id); ids.add(t.id);
       if (!t.name) bad(label + ': topic men gher esm ' + t.id);
       for (const n of t.nums || []) if (!nums.has(n)) bad(label + ': topic «' + t.name + '» feeh tarnema mesh mawgooda #' + n);
+      // 28 Nov: a hidden hymn ("x":1) must leave the topics too (the apps list a topic's nums as they are)
+      for (const n of t.nums || []) { const h = H[n - 1]; if (h && h.x) bad(label + ': topic «' + t.name + '» feeh tarnema mestakhabeya «' + h.title + '» — shilha men el topic'); }
     }
   }
   if (!S || typeof S !== 'object' || !Object.keys(S).length) bad(label + ': STORIES fadya');
