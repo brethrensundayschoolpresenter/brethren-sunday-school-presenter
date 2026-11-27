@@ -4,12 +4,16 @@
 //   node tools/check_content.js                 -> checks renderer/data (desktop data)
 //   node tools/check_content.js --site <site>   -> also checks <site>/app/data (mobile data + keys.js + bible.js)
 //   add --allow-remove if hymns were removed on purpose (otherwise a smaller hymn count is refused)
+//   add --allow-unhide if a hidden hymn ("x":1) is shown again on purpose; --allow-big-change if more than 15 hymns' slides
+//   (or 5 titles) change on purpose — both are refused by default because a Mac rebuild would do exactly that
 // Exit code 0 = safe, 1 = refused (the reason is printed).
 const fs = require('fs'), path = require('path'), vm = require('vm'), cp = require('child_process');
 const args = process.argv.slice(2);
 const site = args.includes('--site') ? args[args.indexOf('--site') + 1] : null;
 const allowRemove = args.includes('--allow-remove');
 const allowTopicRemove = args.includes('--allow-topic-remove');
+const allowUnhide = args.includes('--allow-unhide');        // a hidden hymn ("x":1) shown again on purpose
+const allowBig = args.includes('--allow-big-change');       // more than 15 hymns' slides/titles changed on purpose (e.g. the 27 Nov layout job)
 const errs = [];
 const bad = m => errs.push(m);
 
@@ -27,6 +31,13 @@ function prevCount(dir) {   // hymn count in the last commit, to catch hymns los
   } catch (e) { return 0; }
 }
 
+function prevHymns(dir) {  // the hymns in the last commit (= what users have now)
+  try {
+    const rel = path.relative(cp.execSync('git rev-parse --show-toplevel', { cwd: dir, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(), path.join(dir, 'hymns.js'));
+    const src = cp.execSync('git show HEAD:' + JSON.stringify(rel).slice(1, -1), { cwd: dir, maxBuffer: 64 << 20, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+    const ctx = { window: {} }; vm.runInNewContext(src, ctx); return ctx.window.HYMNS || [];
+  } catch (e) { return []; }
+}
 function prevTopics(dir) {  // topic names in the last commit
   try {
     const top = cp.execSync('git rev-parse --show-toplevel', { cwd: dir, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
@@ -54,6 +65,15 @@ function checkDir(dir, label, withKeys) {
       if (!s || !Array.isArray(s.lines) || !s.lines.length || s.lines.some(l => typeof l !== 'string')) bad(label + ': «' + h.title + '» slide ' + (i + 1) + ' bayza');
       else if (!s.lines.join('').trim()) bad(label + ': «' + h.title + '» slide ' + (i + 1) + ' fadya');
     });
+  }
+  // 28 Nov: a Mac rebuild (build_hymns.py) does not know "x":1 nor the 27 Nov slides -> it would show hidden hymns again and change hundreds of hymns
+  const PH = prevHymns(dir);
+  if (PH.length) {
+    const unhid = PH.filter(p => p.x && H[p.num - 1] && !H[p.num - 1].x).map(p => '«' + p.title + '»');
+    if (unhid.length && !allowUnhide) bad(label + ': tarnema kanet mestakhabeya ("x":1) w ba2et zahra: ' + unhid.slice(0, 5).join('، ') + (unhid.length > 5 ? ' …(' + unhid.length + ')' : '') + ' — law 2asdak zawed --allow-unhide. (Mac rebuild? mamnoo3 yetneshr)');
+    let ch = 0, tch = 0;
+    PH.forEach(p => { const h = H[p.num - 1]; if (!h) return; if (JSON.stringify(h.slides) !== JSON.stringify(p.slides)) ch++; if (h.title !== p.title) tch++; });
+    if ((ch > 15 || tch > 5) && !allowBig) bad(label + ': ta3deel kebeer: ' + ch + ' tarnema slides-ha et8ayaret w ' + tch + ' 3enwan — law 2asdak zawed --allow-big-change. (Mac rebuild? mamnoo3 yetneshr; GitHub data = source of truth)');
   }
   const prev = prevCount(dir);
   if (prev && H.length < prev && !allowRemove) bad(label + ': 3adad el taranem 2al men ' + prev + ' le ' + H.length + ' (law 2asdak zawed --allow-remove)');
