@@ -35,6 +35,13 @@ jobs:
           SS_SMOKE="$PWD/smoke-win7.json" timeout 150 "dist-legacy/win-unpacked/Brethren Sunday School Presenter.exe" || true
           cat smoke-win7.json
           node -e "process.exit(require('./smoke-win7.json').ok === true ? 0 : 1)"
+      - name: TEST BUILD only - keep the Windows installer to try by hand (nothing is published)
+        if: ${{ inputs.test_only }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-windows
+          path: dist/*.exe
+          retention-days: 7
       - name: Publish the release as a DRAFT (users can't see it until the Mac test passes too)
         if: ${{ !inputs.test_only }}
         shell: bash
@@ -67,6 +74,13 @@ jobs:
           P=$!; for i in $(seq 1 150); do kill -0 $P 2>/dev/null || break; sleep 1; done; kill $P 2>/dev/null || true
           cat smoke-mac.json
           node -e "process.exit(require('./smoke-mac.json').ok === true ? 0 : 1)"
+      - name: TEST BUILD only - keep the Mac copy to try by hand (nothing is published)
+        if: ${{ inputs.test_only }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-mac
+          path: dist/*.dmg
+          retention-days: 7
       - name: Add the Mac copy and make the release public (only now users get it)
         if: ${{ !inputs.test_only }}
         env:
