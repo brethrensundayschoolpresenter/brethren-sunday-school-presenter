@@ -562,9 +562,20 @@ function listItems(m) {
   m.items.forEach(it => { const [t, s] = itemLabel(it); const d = item('', t, s, () => openItem(it)); const w = document.createElement('span'); w.className = 'when'; w.textContent = timeOf(it.t); d.appendChild(w); });
 }
 // ---------- «فرصة» prepared on the mobile web app («فرصي»), opened here from the file the servant sends himself ----------
-let PLAN = null;
-try { PLAN = JSON.parse(localStorage.getItem('ss_plan') || 'null'); } catch (e) {}
-const savePlan = () => { try { if (PLAN) localStorage.setItem('ss_plan', JSON.stringify(PLAN)); else localStorage.removeItem('ss_plan'); } catch (e) {} };
+// many فرص on this computer (ss_plans); PLAN = the one open in «فرصي» and the one «+ للفرصة» adds to.
+// ss_plan still keeps the open one, so an older copy of the app still finds it.
+let PLANS = [], PLAN = null;
+const planId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+try { PLANS = JSON.parse(localStorage.getItem('ss_plans') || '[]'); } catch (e) { PLANS = []; }
+if (!Array.isArray(PLANS)) PLANS = [];
+try { const old = JSON.parse(localStorage.getItem('ss_plan') || 'null'); if (old && Array.isArray(old.items) && !PLANS.length) { old.id = old.id || planId(); PLANS.push(old); localStorage.setItem('ss_plan_cur', old.id); } } catch (e) {}
+PLANS.forEach(f => { if (!f.id) f.id = planId(); });
+{ let cur = null; try { cur = localStorage.getItem('ss_plan_cur'); } catch (e) {} PLAN = PLANS.find(f => f.id === cur) || null; }
+const savePlan = () => { try {
+  if (PLAN && !PLANS.includes(PLAN)) PLANS.unshift(PLAN);
+  localStorage.setItem('ss_plans', JSON.stringify(PLANS));
+  if (PLAN) { localStorage.setItem('ss_plan', JSON.stringify(PLAN)); localStorage.setItem('ss_plan_cur', PLAN.id); } else { localStorage.removeItem('ss_plan'); localStorage.removeItem('ss_plan_cur'); }
+} catch (e) { toast('مفيش مكان يتحفظ فيه — شيل فرصة قديمة'); } };
 const MON_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 const planDate = s => { const [y, m, d] = String(s || '').split('-').map(Number); return y ? arD(d) + ' ' + MON_AR[m - 1] + ' ' + arD(y) : ''; };
 const planName = f => f.title || 'فرصة ' + planDate(f.date);
@@ -586,22 +597,47 @@ async function planFromFile(file) {
 }
 // «+ للفرصة»: build a فرصة here on the computer (hymns / verses written on a paper) — saved on this computer only
 function addPlanBtn() {
+  const w = document.createElement('span'); w.className = 'addplan-w';
   const b = document.createElement('button'); b.className = 'btn addplan'; b.type = 'button';
-  b.innerHTML = '+ للفرصة'; b.title = st.cur && st.cur.kind === 'bible' ? 'ضيف الآية المتجهزة للفرصة (تلاقيها في «فرصي»)' : 'ضيف الترنيمة دي للفرصة (تلاقيها في «فرصي»)';
-  b.onclick = e => { e.stopPropagation(); planAdd(); };
-  const hl = $('curTitle').querySelector('.hl'); if (hl) hl.after(b); else $('curTitle').appendChild(b);
+  b.textContent = PLAN ? '+ لـ«' + planName(PLAN).slice(0, 22) + '»' : '+ للفرصة';
+  b.title = (st.cur && st.cur.kind === 'bible' ? 'ضيف الآية المتجهزة' : 'ضيف الترنيمة دي') + (PLAN ? ' لـ«' + planName(PLAN) + '»' : ' لفرصة') + ' (تلاقيها في «فرصي»)';
+  b.onclick = e => { e.stopPropagation(); if (PLAN) planAdd(); else planMenu(w); };
+  const m = document.createElement('button'); m.className = 'btn addplan-m'; m.type = 'button'; m.textContent = '▾'; m.title = 'اختار فرصة تانية أو اعمل فرصة جديدة';
+  m.onclick = e => { e.stopPropagation(); planMenu(w); };
+  w.append(b); if (PLAN) w.append(m);
+  const hl = $('curTitle').querySelector('.hl'); if (hl) hl.after(w); else $('curTitle').appendChild(w);
+}
+function planMenuClose() { const o = $('planMenu'); if (o) o.remove(); document.removeEventListener('mousedown', planMenuOut, true); }
+function planMenuOut(e) { const o = $('planMenu'); if (o && !o.contains(e.target)) planMenuClose(); }
+function planMenu(anchor) {
+  planMenuClose();
+  const o = document.createElement('div'); o.id = 'planMenu'; o.className = 'planmenu';
+  const list = PLANS.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  o.innerHTML = '<b>ضيفها لأنهي فرصة؟</b>' + list.map(f => `<button class="pm-it${f === PLAN ? ' on' : ''}" data-id="${f.id}"><span>${esc(planName(f))}</span><small>${esc(planDate(f.date))} · ${arD(f.items.length)}</small></button>`).join('') +
+    `<div class="pm-new"><b>فرصة جديدة</b><input id="pmName" placeholder="اسمها (مثلًا: فرصة الجمعة)" maxlength="40"><input id="pmDate" type="date" value="${todayId()}"><button class="btn" id="pmMake">اعملها وضيف</button></div>`;
+  document.body.appendChild(o);
+  const r = anchor.getBoundingClientRect(); o.style.top = Math.min(r.bottom + 6, innerHeight - o.offsetHeight - 10) + 'px'; o.style.left = Math.max(10, r.left) + 'px';
+  o.querySelectorAll('.pm-it').forEach(x => x.onclick = () => { PLAN = PLANS.find(f => f.id === x.dataset.id); st.planSel = null; planMenuClose(); planAdd(); });
+  const make = () => {
+    const d = $('pmDate').value || todayId(), n = $('pmName').value.trim();
+    PLAN = { id: planId(), title: n || 'فرصة ' + planDate(d), date: d, items: [], here: true }; PLANS.unshift(PLAN); st.planSel = null;
+    planMenuClose(); planAdd();
+  };
+  $('pmMake').onclick = make; $('pmName').onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') make(); if (e.key === 'Escape') planMenuClose(); };
+  if (!list.length) $('pmName').focus();
+  setTimeout(() => document.addEventListener('mousedown', planMenuOut, true), 0);
 }
 function planAdd() {
-  if (!st.cur) return;
-  if (!PLAN) PLAN = { title: 'فرصة ' + planDate(todayId()), date: todayId(), items: [], here: true };
+  if (!st.cur || !PLAN) return;
   let it;
   if (st.cur.kind === 'hymn') it = { t: 'h', n: st.cur.num, title: H[st.cur.num - 1].title };
   else { const v = Math.max(0, st.cue); it = { t: 'b', b: st.cur.b, c: st.cur.c, v, v2: v }; }
   const same = PLAN.items.some(x => x.t === it.t && (it.t === 'h' ? (x.title === it.title || x.n === it.n) : (x.b === it.b && x.c === it.c && x.v === it.v)));
-  if (same) { toast('دي موجودة في الفرصة خلاص'); return; }
+  if (same) { toast('دي موجودة في «' + planName(PLAN) + '» خلاص'); refreshAddBtn(); return; }
   PLAN.items.push(it); savePlan(); if (st.tab === 'plan') search();
-  toast('اتضافت للفرصة (' + arD(PLAN.items.length) + ') — تلاقيها في «فرصي»');
+  refreshAddBtn(); toast('اتضافت لـ«' + planName(PLAN) + '» (' + arD(PLAN.items.length) + ') — تلاقيها في «فرصي»');
 }
+function refreshAddBtn() { const w = $('curTitle').querySelector('.addplan-w'); if (w) { w.remove(); addPlanBtn(); } }
 // «فرصي»: hold the ≡ and drag the row (like the mobile); the other rows slide out of the way
 function planDrag() {
   const box = $('results');
@@ -629,7 +665,12 @@ function planDrag() {
 }
 function planMove(i, d) { const j = i + d, a = PLAN.items; if (j < 0 || j >= a.length) return; [a[i], a[j]] = [a[j], a[i]]; if (st.planSel === i) st.planSel = j; else if (st.planSel === j) st.planSel = i; savePlan(); search(); }
 function planDel(i) { PLAN.items.splice(i, 1); if (st.planSel === i) st.planSel = null; else if (st.planSel > i) st.planSel--; savePlan(); search(); }
-function planUse(f) { PLAN = f; st.planSel = null; savePlan(); setTab('plan'); search(); toast('الفرصة جاهزة: ' + planName(f)); }
+function planUse(f) {   // a فرصة from the phone: the same one again (same name + date) replaces the old copy
+  const old = PLANS.find(x => x.from === 'phone' && x.title === f.title && x.date === f.date);
+  f = Object.assign({}, f, { id: old ? old.id : planId(), from: 'phone' });
+  if (old) PLANS[PLANS.indexOf(old)] = f; else PLANS.unshift(f);
+  PLAN = f; st.planList = false; st.planSel = null; savePlan(); setTab('plan'); search(); refreshAddBtn(); toast('الفرصة جاهزة: ' + planName(f));
+}
 function planOpen(it, i) {
   st.planSel = i;
   if (it.t === 'h') { const n = hymnOf({ title: it.title, num: it.n }); if (n) loadHymn(n, 0); else toast('الترنيمة دي مش لاقيها'); }
@@ -640,9 +681,10 @@ function planOpen(it, i) {
 }
 function showPlan() {
   const f = PLAN, box = document.createElement('div'); box.className = 'plan';
-  box.innerHTML = `<div class="plan-h"><span class="hl">الفرصة اللي اتحضّرت</span> <b>${esc(planName(f))}</b><small>${esc(planDate(f.date))}${f.place ? ' · ' + esc(f.place) : ''}</small><button class="btn plan-x" title="شيل الفرصة دي">شيلها</button></div>`;
+  box.innerHTML = `<div class="plan-h"><span class="hl">الفرصة اللي اتحضّرت</span> <b>${esc(planName(f))}</b><small>${esc(planDate(f.date))}${f.place ? ' · ' + esc(f.place) : ''}</small><button class="btn plan-all" title="كل الفرص اللي على الكمبيوتر">كل فرصي${PLANS.length > 1 ? ' (' + arD(PLANS.length) + ')' : ''}</button><button class="btn plan-x" title="امسح الفرصة دي من الكمبيوتر">شيلها</button></div>`;
   $('results').appendChild(box);
-  box.querySelector('.plan-x').onclick = () => { PLAN = null; st.planSel = null; savePlan(); search(); };
+  box.querySelector('.plan-all').onclick = () => { st.planList = true; st.planSel = null; search(); };
+  box.querySelector('.plan-x').onclick = () => { if (!confirm('تمسح «' + planName(f) + '» من الكمبيوتر؟')) return; PLANS = PLANS.filter(x => x !== f); PLAN = null; st.planSel = null; savePlan(); search(); refreshAddBtn(); toast('الفرصة اتمسحت'); };
   if (!f.items.length) empty('<b>📝</b>الفرصة فاضية — افتح أي ترنيمة أو آية ودوس «+ للفرصة» فوق.');
   f.items.forEach((it, i) => {
     let t, s;
@@ -665,7 +707,17 @@ document.addEventListener('dragover', e => { if (e.dataTransfer && [...e.dataTra
 document.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files[0]; if (f && /\.json$/i.test(f.name)) { e.preventDefault(); planFromFile(f); } });
 // «فرصي» tab: the فرصة from the phone, or how to open one
 function showPlanTab() {
-  if (PLAN) { showPlan(); const o = document.createElement('button'); o.className = 'plan-open'; o.style.marginTop = '10px'; o.innerHTML = '<b>فرصة تانية؟</b> افتح ملف تاني من «فرصي» (أو اسحبه هنا)'; o.onclick = planPick; $('results').appendChild(o); return; }
+  if (PLAN && !st.planList) { showPlan(); return; }
+  st.planList = false;
+  if (PLANS.length) {   // all the فرص on this computer, the next one first
+    const t = todayId(), list = PLANS.slice().sort((a, b) => (a.date >= t) !== (b.date >= t) ? (a.date >= t ? -1 : 1) : a.date >= t ? (a.date > b.date ? 1 : -1) : (a.date < b.date ? 1 : -1));
+    const h = document.createElement('div'); h.className = 'meethead'; h.innerHTML = '<b>فرصي على الكمبيوتر</b>'; $('results').appendChild(h);
+    list.forEach(f => item('', planName(f), planDate(f.date) + (f.place ? ' · ' + f.place : '') + ' · ' + arD(f.items.length) + (f.items.length === 1 ? ' حاجة' : ' حاجات') + (f.from === 'phone' ? ' · من الموبايل' : '') + (f === PLAN ? ' · «+ للفرصة» بيضيف فيها' : ''), () => { PLAN = f; st.planList = false; st.planSel = null; savePlan(); search(); refreshAddBtn(); }));
+  }
+  const nw = document.createElement('button'); nw.className = 'plan-open'; nw.style.marginTop = '10px';
+  nw.innerHTML = '<b>+ فرصة جديدة</b> اعملها هنا، وبعدين افتح أي ترنيمة أو آية ودوس «+ للفرصة»';
+  nw.onclick = e => { e.stopPropagation(); planMenu(nw); }; $('results').appendChild(nw);
+  if (PLANS.length) { const o = document.createElement('button'); o.className = 'plan-open'; o.style.marginTop = '10px'; o.innerHTML = '<b>فرصة من الموبايل؟</b> افتح الملف اللي بعته لنفسك من «فرصي» (أو اسحبه هنا)'; o.onclick = planPick; $('results').appendChild(o); return; }
   const o = document.createElement('button'); o.className = 'plan-open'; o.innerHTML = '<b>عندك فرصة محضّرها على الموبايل؟</b> افتح الملف اللي بعته لنفسك من «فرصي» (أو اسحبه هنا)'; o.onclick = planPick; $('results').appendChild(o);
   empty('<b>📱</b>على الموبايل: افتح الفرصة في «فرصي» ودوس «هتعرضها على الكمبيوتر؟»، وابعتها لنفسك واتساب.<br>وعلى الكمبيوتر افتح الملف من هنا، تلاقي الترانيم والشواهد بالترتيب وملاحظاتك.<br><br><b>📝</b>أو حضّرها هنا على الكمبيوتر: افتح أي ترنيمة أو آية ودوس «+ للفرصة» فوق، وهتتجمّع هنا بالترتيب.');
 }
@@ -795,9 +847,17 @@ if (APP && window.bp.on) window.bp.on('update', u => {
 });
 // suggestions / mistakes / a hymn to add go to WhatsApp (the hymn on screen is written in the message)
 const WA = 'https://wa.me/201227120955';
+// the app's version under the name (so a servant can tell us which copy he has); the data number only goes in «ابعت اقتراح»
+let APP_VER = '', DATA_VER = 0;
+(async () => {
+  try { APP_VER = APP && window.bp.version ? await window.bp.version() : ''; } catch (e) {}
+  try { const c = APP && window.bp.contentInfo ? await window.bp.contentInfo() : null; DATA_VER = c ? c.version : 0; } catch (e) {}
+  const v = $('appVer'); if (v && APP_VER) v.textContent = 'النسخة ' + APP_VER;
+})();
 function suggest() {
   const h = st.cur && st.cur.kind === 'hymn' && H[st.cur.num - 1] ? H[st.cur.num - 1].title : '';
-  const url = WA + '?text=' + encodeURIComponent(h ? 'ترنيمة: ' + h + '\n' : 'برنامج ترانيم مدارس الأحد:\n');
+  const ver = APP_VER ? 'الكمبيوتر ' + APP_VER + (DATA_VER ? ' · ترانيم ' + DATA_VER : '') + '\n' : '';
+  const url = WA + '?text=' + encodeURIComponent(ver + (h ? 'ترنيمة: ' + h + '\n' : 'برنامج ترانيم مدارس الأحد:\n'));
   if (APP && window.bp.openLink) window.bp.openLink(url); else window.open(url, '_blank');
 }
 $('sugBtn').onclick = suggest;
