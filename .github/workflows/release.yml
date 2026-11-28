@@ -74,12 +74,31 @@ jobs:
           P=$!; for i in $(seq 1 150); do kill -0 $P 2>/dev/null || break; sleep 1; done; kill $P 2>/dev/null || true
           cat smoke-mac.json
           node -e "process.exit(require('./smoke-mac.json').ok === true ? 0 : 1)"
-      - name: TEST BUILD only - keep the Mac copy to try by hand (nothing is published)
+          mkdir -p out && cp dist/*.dmg out/
+      # smaller Mac copies (about half the size): Apple Silicon only + Intel only. The universal one above stays for anyone we can't detect.
+      - run: npx electron-builder --mac dmg --arm64 --x64 --publish never -c.dmg.artifactName='Brethren-Sunday-School-Presenter-Mac-${arch}-${version}.${ext}'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Test the Apple Silicon copy and the Intel copy
+        run: |
+          ls dist
+          V=$(node -p "require('./package.json').version")
+          softwareupdate --install-rosetta --agree-to-license >/dev/null 2>&1 || true
+          t() { APP="$(ls -d "$1"/*.app | head -1)"; echo "$APP"; rm -f smoke-$2.json
+            SS_SMOKE="$PWD/smoke-$2.json" $3 "$APP/Contents/MacOS/Brethren Sunday School Presenter" &
+            P=$!; for i in $(seq 1 150); do kill -0 $P 2>/dev/null || break; sleep 1; done; kill $P 2>/dev/null || true
+            cat smoke-$2.json; node -e "process.exit(require('./smoke-$2.json').ok === true ? 0 : 1)"; }
+          t dist/mac-arm64 arm ""
+          t dist/mac intel "arch -x86_64"
+          mv "dist/Brethren-Sunday-School-Presenter-Mac-arm64-$V.dmg" "out/Brethren-Sunday-School-Presenter-Mac-AppleSilicon-$V.dmg"
+          mv "dist/Brethren-Sunday-School-Presenter-Mac-x64-$V.dmg" "out/Brethren-Sunday-School-Presenter-Mac-Intel-$V.dmg"
+          ls -la out
+      - name: TEST BUILD only - keep the Mac copies to try by hand (nothing is published)
         if: ${{ inputs.test_only }}
         uses: actions/upload-artifact@v4
         with:
           name: test-mac
-          path: dist/*.dmg
+          path: out/*.dmg
           retention-days: 7
       - name: Add the Mac copy and make the release public (only now users get it)
         if: ${{ !inputs.test_only }}
@@ -87,6 +106,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           V=$(node -p "require('./package.json').version")
-          ls dist
-          gh release upload "v$V" dist/*.dmg --clobber
+          ls out
+          gh release upload "v$V" out/*.dmg --clobber
           gh release edit "v$V" --draft=false --latest

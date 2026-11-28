@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('bp', {
   isApp: true,
   platform: process.platform,
+  arch: process.arch,   // Mac: arm64 = Apple Silicon, x64 = Intel (also when the universal copy runs)
   slide: s => ipcRenderer.send('slide', s),
   style: s => ipcRenderer.send('style', s),
   openOutput: () => ipcRenderer.send('open-output'),

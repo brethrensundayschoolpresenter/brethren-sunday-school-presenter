@@ -842,7 +842,7 @@ if (APP && window.bp.on) window.bp.on('update', u => {
   }
   if (u.state === 'mac') {   // Mac: no self-update (not signed by Apple) — download the new copy from the site
     const b = $('updBtn'); b.style.display = ''; b.textContent = 'نسخة جديدة — نزّلها';
-    b.onclick = () => window.bp.openLink('https://brethrensundayschoolpresenter.github.io/#mac');
+    b.onclick = () => window.bp.openLink('https://brethrensundayschoolpresenter.github.io/#mac' + (window.bp.arch === 'arm64' ? '-arm64' : window.bp.arch === 'x64' ? '-x64' : ''));
   }
 });
 // suggestions / mistakes / a hymn to add go to WhatsApp (the hymn on screen is written in the message)
@@ -856,7 +856,7 @@ let APP_VER = '', DATA_VER = 0;
 })();
 function suggest() {
   const h = st.cur && st.cur.kind === 'hymn' && H[st.cur.num - 1] ? H[st.cur.num - 1].title : '';
-  const ver = APP_VER ? 'الكمبيوتر ' + APP_VER + (DATA_VER ? ' · ترانيم ' + DATA_VER : '') + '\n' : '';
+  const ver = APP_VER ? 'نسخة الكمبيوتر ' + APP_VER + (DATA_VER ? ' (' + DATA_VER + ')' : '') + '\n' : '';
   const url = WA + '?text=' + encodeURIComponent(ver + (h ? 'ترنيمة: ' + h + '\n' : 'برنامج ترانيم مدارس الأحد:\n'));
   if (APP && window.bp.openLink) window.bp.openLink(url); else window.open(url, '_blank');
 }
@@ -871,6 +871,7 @@ if (APP && window.bp.on) window.bp.on('content', c => {
 });
 // "what's new" after an update: shown once per new version, never on a first install
 const WHATSNEW = {
+  '1.0.21': ['«فرصي»: تقدر تحضّر أكتر من فرصة هنا على الكمبيوتر. افتح أي ترنيمة أو آية ودوس «+ للفرصة»، واختار الفرصة أو اعمل واحدة جديدة باسمها وتاريخها، ورتّبها بسحب ≡.', 'في «النهارده» و«السجل» و«فرصي» و«المواضيع»: الأسهم ↑↓ بتمشي في القايمة و<bdi dir="ltr">Enter</bdi> بيفتح ويعرض، و← → بتقلّب الشرايح زي الأول.', 'الحروف في قايمة الترانيم بقت مترتبة أبجديًا (ا ب ت ث…).', '«الشكل والخط»: ٣ خطوط جديدة، وتقدر تضيف خط من جهازك.', 'رقم نسخة البرنامج بقى مكتوب فوق تحت اسم البرنامج.'],
   '1.0.17': ['الترانيم الجديدة بتشتغل لوحدها أول ما توصل، لو مفيش حاجة معروضة على الشاشة.', 'رسالة «اتعرضت هنا بس» (لما مفيش بروجكتور) بقت بتظهر مرة واحدة بس، وعلى الماك بتقولك الخطوات الصح.'],
   '1.0.14': ['«فرصي» بقت تبويب لوحدها جنب «النهارده»: افتح فيها الفرصة اللي حضّرتها على الموبايل في «فرصي».', '«ابعت اقتراح» بيفتح واتساب: ابعت أي غلطة، أو لو عايز تضيف ترنيمة ابعتها لنا مكتوبة تكست أو باوربوينت.'],
   '1.0.13': ['«الشكل والخط»: تقدر تحط صورة في خلفية الترانيم (أو صورتين يتبادلوا زي اللونين) — البرنامج بيغمّقها ويعملها blur عشان الكلام يبان، ويختار لون الكلام لوحده (وتقدر تغيّره تحت كل صورة). الصور بتتحفظ على الجهاز ده بس.', '«ابعت اقتراح» بقى بيفتح واتساب على طول: ابعت أي غلطة، أو لو عايز تضيف ترنيمة ابعتها لنا مكتوبة تكست أو باوربوينت.', '«فرصي»: افتح الفرصة اللي حضّرتها على الموبايل في «فرصي» — ابعت الملف لنفسك واتساب وافتحه هنا، وتلاقي الترانيم والشواهد بالترتيب وملاحظاتك.', 'لما تفتح آية أو قصة من الترنيمة، الآيات المقترحة بتبقى متعلّم عليها بالأصفر في الكتاب المقدس.', 'في الكتاب المقدس الأسهم فوق وتحت بتقلّب الآيات زي الأسهم يمين وشمال، ولو الآية معروضة اللي بعدها بتظهر على طول.'],
