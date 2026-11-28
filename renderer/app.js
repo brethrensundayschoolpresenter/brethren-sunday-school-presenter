@@ -602,6 +602,31 @@ function planAdd() {
   PLAN.items.push(it); savePlan(); if (st.tab === 'plan') search();
   toast('اتضافت للفرصة (' + arD(PLAN.items.length) + ') — تلاقيها في «فرصي»');
 }
+// «فرصي»: hold the ≡ and drag the row (like the mobile); the other rows slide out of the way
+function planDrag() {
+  const box = $('results');
+  box.querySelectorAll('.plan-it .dh').forEach(h => h.addEventListener('pointerdown', e => {
+    if (e.button > 0) return; e.preventDefault(); e.stopPropagation();
+    const row = h.closest('.plan-it'), rows = [...box.querySelectorAll('.plan-it')], from = rows.indexOf(row);
+    const mid = rows.map(r => r.offsetTop + r.offsetHeight / 2), gap = rows.length > 1 ? Math.max(0, rows[1].offsetTop - rows[0].offsetTop - rows[0].offsetHeight) : 0, step = row.offsetHeight + gap;
+    let y0 = e.clientY, st0 = box.scrollTop, cy = e.clientY, to = from, raf = 0, done = false;
+    try { h.setPointerCapture(e.pointerId); } catch (x) {}
+    row.classList.add('pdrag'); rows.forEach(r => { if (r !== row) r.classList.add('pslide'); });
+    const place = () => {
+      const dy = cy - y0 + box.scrollTop - st0, c = mid[from] + dy; row.style.transform = 'translateY(' + dy + 'px)';
+      to = from; for (let i = 0; i < rows.length; i++) { if (i < from && c < mid[i]) { to = i; break; } if (i > from && c > mid[i]) to = i; }
+      rows.forEach((r, i) => { if (r === row) return; r.style.transform = from < i && i <= to ? 'translateY(' + -step + 'px)' : to <= i && i < from ? 'translateY(' + step + 'px)' : ''; });
+    };
+    const tick = () => { raf = 0; if (done) return; const b = box.getBoundingClientRect(), v = cy < b.top + 50 ? -8 : cy > b.bottom - 50 ? 8 : 0; if (v) { box.scrollTop += v; place(); raf = requestAnimationFrame(tick); } };
+    const move = ev => { cy = ev.clientY; place(); if (!raf) raf = requestAnimationFrame(tick); };
+    const end = () => {
+      done = true; removeEventListener('pointermove', move); removeEventListener('pointerup', end); removeEventListener('pointercancel', end);
+      rows.forEach(r => { r.style.transform = ''; r.classList.remove('pslide', 'pdrag'); });
+      if (to !== from) { const a = PLAN.items, [x] = a.splice(from, 1); a.splice(to, 0, x); const sel = st.planSel; if (sel === from) st.planSel = to; else if (sel != null && from < sel && sel <= to) st.planSel--; else if (sel != null && to <= sel && sel < from) st.planSel++; const y = box.scrollTop; savePlan(); search(); box.scrollTop = y; }
+    };
+    addEventListener('pointermove', move); addEventListener('pointerup', end); addEventListener('pointercancel', end);
+  }));
+}
 function planMove(i, d) { const j = i + d, a = PLAN.items; if (j < 0 || j >= a.length) return; [a[i], a[j]] = [a[j], a[i]]; if (st.planSel === i) st.planSel = j; else if (st.planSel === j) st.planSel = i; savePlan(); search(); }
 function planDel(i) { PLAN.items.splice(i, 1); if (st.planSel === i) st.planSel = null; else if (st.planSel > i) st.planSel--; savePlan(); search(); }
 function planUse(f) { PLAN = f; st.planSel = null; savePlan(); setTab('plan'); search(); toast('الفرصة جاهزة: ' + planName(f)); }
@@ -625,11 +650,14 @@ function showPlan() {
     else { const v2 = it.v2 != null ? it.v2 : it.v; t = B[it.b] ? ref(it.b, it.c, it.v) + (v2 > it.v ? '–' + arD(v2 + 1) : '') : 'شاهد'; s = B[it.b] && B[it.b].chapters[it.c] ? String(B[it.b].chapters[it.c][it.v] || '').replace(/[\u064B-\u0652\u0670]/g, '').slice(0, 70) : ''; }
     const d = item(arD(i + 1), t, s, () => planOpen(it, i)); d.classList.add('plan-it'); if (st.planSel === i) d.classList.add('sel');
     const ctl = document.createElement('span'); ctl.className = 'plan-ctl';
-    ctl.innerHTML = `<button data-m="-1" title="لفوق">▲</button><button data-m="1" title="لتحت">▼</button><button data-m="x" title="شيلها من الفرصة">×</button>`;
-    ctl.querySelectorAll('button').forEach(b => b.onclick = e => { e.stopPropagation(); if (b.dataset.m === 'x') planDel(i); else planMove(i, +b.dataset.m); });
-    d.appendChild(ctl);
-    if (it.note) { const n = document.createElement('div'); n.className = 'plan-n'; n.textContent = it.note; d.querySelector('div:last-child').appendChild(n); }
+    ctl.innerHTML = `<button data-m="x" title="شيلها من الفرصة">×</button>`;
+    ctl.querySelector('button').onclick = e => { e.stopPropagation(); planDel(i); };
+    const dh = document.createElement('span'); dh.className = 'dh'; dh.title = 'امسكها واسحبها لفوق أو لتحت';
+    dh.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14"/></svg>'; dh.onclick = e => e.stopPropagation();
+    if (it.note) { const n = document.createElement('div'); n.className = 'plan-n'; n.textContent = it.note; const q = d.querySelector('div:last-child'); if (q) q.appendChild(n); }
+    ctl.prepend(dh); d.appendChild(ctl);
   });
+  planDrag();
   if (f.note) { const n = document.createElement('div'); n.className = 'plan-note'; n.innerHTML = `<b>ملاحظاتك:</b> ${esc(f.note).replace(/\n/g, '<br>')}`; $('results').appendChild(n); }
 }
 // drop the file on the window = open it
