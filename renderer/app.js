@@ -104,7 +104,8 @@ function hymnSlides(num) {
     num: s.label === 'ق' ? 'القرار' : (s.label ? 'العدد ' + arD(s.label) : ''),
     html: s.lines.map(l => `<div class="ln" dir="auto">${esc(l)}</div>`).join(''),
     lab: slideName(s, i) + (s.part ? ' (تكملة)' : ''),
-    ref: `${hName(num)} · ${slideName(s, i)}`
+    ref: `${hName(num)} · ${slideName(s, i)}`,
+    fin: i === h.slides.length - 1   // the last slide of the hymn: a small «Finish» bottom-left (on the projector too)
   })).concat([{ theme: 'b', end: true, html: '', lab: 'شاشة سودا (النهاية)', ref: `${hName(num)} · خلصت — شاشة سودا` }]);
 }
 function chapterSlides(b, c) {
@@ -116,7 +117,7 @@ function paint(el, s) {
   if (!s) { el.innerHTML = ''; return; }
   if (s.end) { el.classList.add('th-b'); el.innerHTML = el.id === 'cueScr' ? '<div class="endlab">آخر الترنيمة — الشاشة هتبقى سودا</div>' : ''; return; }
   el.classList.add('th-' + s.theme); if (s.bg) { el.style.background = s.bg; el.style.color = s.fg; }
-  el.innerHTML = decoOf(s) + (s.num ? `<span class="vn">${s.num}</span>` : '') + `<div class="tx">${s.html}</div>`;
+  el.innerHTML = decoOf(s) + (s.num ? `<span class="vn">${s.num}</span>` : '') + `<div class="tx">${s.html}</div>` + (s.fin ? '<span class="fin">Finish</span>' : '');
   if (el.classList.contains('screen')) fitBox(el);
 }
 // suggested Bible story + the hymn's idea + the verses its words echo (button "قصة مقترحة" turns it on/off)
@@ -200,7 +201,7 @@ function renderSlides() {
   st.slides.forEach((s, i) => {
     const d = document.createElement('div'); d.className = 'slide th-' + s.theme + (s.end ? ' end' : '');
     if (s.bg && !s.end) { d.style.background = s.bg; d.style.color = s.fg; }
-    d.innerHTML = (s.end ? '' : decoOf(s)) + `<span class="lab">${s.lab}</span><div class="tx">${s.html}</div>`;
+    d.innerHTML = (s.end ? '' : decoOf(s)) + `<span class="lab">${s.lab}</span><div class="tx">${s.html}</div>` + (s.fin ? '<span class="fin">Finish</span>' : '');
     d.title = 'ضغطة = جهّزها (ولو الترنيمة معروضة تظهر على طول) · ضغطتين = اعرضها';
     if (st.cur && st.cur.kind === 'hymn' && i === st.hit) d.classList.add('hit');
     if (st.cur && st.cur.kind === 'bible' && st.sug && st.sug.b === st.cur.b && st.sug.c === st.cur.c && i >= st.sug.v && i <= st.sug.v2) d.classList.add('sug');
@@ -269,7 +270,7 @@ function openOut() {
   $('outLbl').textContent = 'شاشة العرض مفتوحة';
 }
 function sendOut(s) {
-  if (APP) { window.bp.slide(s ? { theme: s.theme, bg: s.bg || '', fg: s.fg || '', deco: decoOf(s), num: s.num || '', html: s.html, end: !!s.end } : null); return; }
+  if (APP) { window.bp.slide(s ? { theme: s.theme, bg: s.bg || '', fg: s.fg || '', deco: decoOf(s), num: s.num || '', html: s.html, end: !!s.end, fin: !!s.fin } : null); return; }
   if (!st.out || st.out.closed) return;
   const t = st.out.document.getElementById('t'); if (!t) return;
   t.style.opacity = 0;

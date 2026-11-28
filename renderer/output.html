@@ -12,18 +12,20 @@ body.th-b,body.th-bible{background:#000}
 .r{font-size:.55em;color:#ffd27f;margin-top:1.1em;font-family:"K Baloo",sans-serif}
 #t.nw .ln{white-space:nowrap}
 #t:not(.nw) .ln{text-wrap:balance}
+.fin{position:absolute;bottom:3vh;left:4vw;font-family:"K Baloo",sans-serif;font-weight:700;font-size:2.4vh;opacity:.55;z-index:2;color:inherit}
 </style></head>
 <body><div id="d"></div><div id="t"></div>
 <script>
 const t = document.getElementById('t'), dd = document.getElementById('d');
 function paint(s) {
-  t.className = ''; document.body.className = ''; document.body.style.background = ''; dd.innerHTML = ''; document.querySelectorAll('.vn').forEach(x => x.remove());
+  t.className = ''; document.body.className = ''; document.body.style.background = ''; dd.innerHTML = ''; document.querySelectorAll('.vn,.fin').forEach(x => x.remove());
   if (!s || s.end) { t.innerHTML = ''; return; }
   t.classList.add('th-' + s.theme); document.body.className = 'th-' + s.theme;
     dd.innerHTML = s.deco || '';
   if (s.bg) { document.body.style.background = s.bg; t.style.color = s.fg; } else t.style.color = '';
   if (s.num) { const v = document.createElement('span'); v.className = 'vn'; v.textContent = s.num; document.body.appendChild(v); }
   t.innerHTML = `<div class="tx">${s.html}</div>`;
+  if (s.fin) { const f = document.createElement('span'); f.className = 'fin'; f.textContent = 'Finish'; f.style.color = getComputedStyle(t).color; document.body.appendChild(f); }
 }
 let FILL = true, SCALE = 1;
 const over = () => t.scrollHeight > t.clientHeight + 2 || t.scrollWidth > t.clientWidth + 2;
