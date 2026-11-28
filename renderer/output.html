@@ -42,7 +42,9 @@ function fit() {
 }
 window.addEventListener('resize', fit);
 window.bp.on('slide', s => { paint(s); fit(); });
-window.bp.on('style', st => { FILL = st.fill !== false; SCALE = st.scale || 1; const r = document.documentElement.style; r.setProperty('--f', `"${st.font}"`); r.setProperty('--fb', `"${st.fontB || 'K Naskh'}"`); r.setProperty('--s', st.scale); document.fonts.ready.then(() => setTimeout(fit, 50)); });
+const UFL = new Set();   // his own fonts (sent by the control window, loaded once)
+window.bp.on('style', st => { (st.ufonts || []).forEach(f => { if (UFL.has(f.fam)) return; UFL.add(f.fam); try { const ff = new FontFace(f.fam, `url(${f.data})`); ff.load().then(x => { document.fonts.add(x); setTimeout(fit, 50); }).catch(() => UFL.delete(f.fam)); } catch (e) {} });
+  FILL = st.fill !== false; SCALE = st.scale || 1; const r = document.documentElement.style; r.setProperty('--f', `"${st.font}"`); r.setProperty('--fb', `"${st.fontB || 'K Naskh'}"`); r.setProperty('--s', st.scale); document.fonts.ready.then(() => setTimeout(fit, 50)); });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { window.bp.toggleOutputFullscreen(); return; }
   window.bp.key({ key: e.key, code: e.code });

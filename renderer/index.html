@@ -205,6 +205,9 @@ main > .col:last-child{overflow-y:auto}
 .news .nh a span{font-size:12px;color:#1f6fc5}
 .news .nh{list-style:none;margin:0 -18px 6px 0}
 .news .nh-t{list-style:none;font-weight:800;margin:8px -18px 4px 0}
+.ufonts{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0 2px}.ufonts .btn{font-size:12px;padding:4px 10px}.uf{display:inline-flex;align-items:center;gap:4px;border:1.5px solid #111;border-radius:8px;padding:1px 4px 1px 8px;font-size:13px;background:#fffde6}.uf button{border:0;background:none;cursor:pointer;font-size:15px;line-height:1;padding:0 2px}
+.addplan{margin-right:auto;font-size:13px;padding:4px 12px;background:#fffde6;border:2px solid #111;white-space:nowrap}.addplan:hover{background:var(--hi)}
+.plan-ctl{display:flex;gap:2px;margin-right:auto;align-self:center}.plan-ctl button{border:1.5px solid #111;background:#fff;border-radius:6px;width:24px;height:24px;padding:0;cursor:pointer;font-size:11px;line-height:1}.plan-ctl button:hover{background:var(--hi)}
 </style>
 </head>
 <body>
@@ -262,7 +265,12 @@ main > .col:last-child{overflow-y:auto}
       <option value="K Almarai">المراعي — عريض</option>
       <option value="K Tajawal">تجوّل — بسيط</option>
       <option value="K Messiri">المسيري — أنيق</option>
+      <option value="K Readex">ريدكس — عصري وواضح</option>
+      <option value="K Plex">بلكس — نضيف</option>
+      <option value="K Alexandria">الإسكندرية — عريض</option>
+      <optgroup label="خطوطك" id="ufontsG"></optgroup>
     </select>
+    <div class="ufonts"><button class="btn" id="ufAdd" type="button">+ ضيف خط من جهازك</button><span id="ufList"></span></div>
     <div class="fprev th-w" id="fprev">يسوع بيحبني وأنا بحبه</div>
     <label>خط الكتاب المقدس (بالتشكيل)</label>
     <select id="fontBSel">
@@ -271,6 +279,7 @@ main > .col:last-child{overflow-y:auto}
       <option value="K Scheherazade">شهرزاد — كبير</option>
       <option value="K Messiri">المسيري</option>
       <option value="K Cairo">القاهرة</option>
+      <optgroup label="خطوطك" id="ufontsGB"></optgroup>
     </select>
     <div class="fprev th-bible" id="fbprev">لأَنَّهُ هكَذَا أَحَبَّ اللهُ الْعَالَمَ</div>
     <label>حجم الكلام</label>
@@ -312,7 +321,7 @@ main > .col:last-child{overflow-y:auto}
       <button class="btn go" id="playBtn"><svg class="ic"><use href="#i-play"/></svg>اعرض<span class="lg"> على الشاشة</span></button>
       <button class="btn" id="nextBtn">التالي<svg class="ic"><use href="#i-next"/></svg></button>
     </div>
-    <div class="keys"><kbd>مسافة</kbd> اعرض · <kbd>←</kbd><kbd>→</kbd> قلّب · <kbd>B</kbd> إخفاء · اكتب على طول = بحث · <kbd>↓</kbd><kbd>↑</kbd> <kbd>Enter</kbd> افتح</div>
+    <div class="keys"><kbd>مسافة</kbd> اعرض · <kbd>←</kbd><kbd>→</kbd> قلّب · <kbd>B</kbd> إخفاء · اكتب على طول = بحث · <kbd>↓</kbd><kbd>↑</kbd> <kbd>Enter</kbd> افتح (في البحث والنهارده والسجل وفرصي والمواضيع)</div>
   </section>
 </main>
 <div class="toast" id="toast"></div>

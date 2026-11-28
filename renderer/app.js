@@ -180,6 +180,7 @@ function loadHymn(num, cueIdx, hit) {
   const ti = (window.TOPICS || []).map((t, i) => t.nums.includes(num) ? i : -1).filter(i => i >= 0);
   $('curTitle').innerHTML = `<span class="hl">${esc(hName(num))}</span>` + (ti.length ? `<small class="tps">${ti.map(i => `<a class="tpl" data-ti="${i}" title="افتح الموضوع ده">${esc(window.TOPICS[i].name)}</a>`).join(' · ')}</small>` : '');
   $('curTitle').querySelectorAll('.tpl').forEach(a => a.onclick = e => { e.stopPropagation(); openTopic(+a.dataset.ti); });
+  addPlanBtn();
   showStory(num);
   renderSlides(); setCue(cueIdx || 0);
 }
@@ -188,6 +189,7 @@ function loadChapter(b, c, v) {
   st.cur = { kind: 'bible', b, c }; st.slides = chapterSlides(b, c);
   $('curTitle').innerHTML = `<span class="hl">${bookName(b)} ${arD(c + 1)}</span>` + (st.back ? `<button class="btn backbtn" id="backBtn"><svg class="ic"><use href="#i-prev"/></svg>رجوع للترنيمة: ${esc(hName(st.back.num))}</button>` : '');
   if (st.back) $('backBtn').onclick = goBack;
+  addPlanBtn();
   showStory(null);
   renderSlides(); setCue(v || 0);
 }
@@ -286,9 +288,47 @@ if (APP) {
   window.bp.on('key', k => onKey({ key: k.key, code: k.code, target: document.body, preventDefault() {} }));
 }
 
+// ---------- his own fonts (a .ttf/.otf file from this computer, e.g. a font he downloaded himself): saved on this computer only ----------
+let UF = []; try { UF = JSON.parse(localStorage.getItem('ss_ufonts') || '[]'); } catch (e) { UF = []; }
+const ufFam = f => 'U ' + f.id;
+async function ufRegister(f, doc) {
+  try { const ff = new FontFace(ufFam(f), `url(${f.data})`); await ff.load(); (doc || document).fonts.add(ff); return true; } catch (e) { return false; }
+}
+function ufMenus() {
+  const opt = f => `<option value="${ufFam(f)}">${esc(f.name)}</option>`;
+  $('ufontsG').innerHTML = UF.map(opt).join(''); $('ufontsGB').innerHTML = UF.map(opt).join('');
+  $('ufontsG').style.display = $('ufontsGB').style.display = UF.length ? '' : 'none';
+  $('ufList').innerHTML = UF.map(f => `<span class="uf" style="font-family:'${ufFam(f)}'">${esc(f.name)}<button data-uf="${f.id}" title="شيل الخط ده">×</button></span>`).join('');
+  $('ufList').querySelectorAll('[data-uf]').forEach(b => b.onclick = () => {
+    UF = UF.filter(f => f.id !== b.dataset.uf); try { localStorage.setItem('ss_ufonts', JSON.stringify(UF)); } catch (e) {}
+    const gone = x => x && x.startsWith('U ') && !UF.some(f => ufFam(f) === x);
+    if (gone(SET.font)) SET.font = 'K Baloo'; if (gone(SET.fontB)) SET.fontB = 'K Naskh';
+    ufMenus(); relook(); toast('الخط اتشال');
+  });
+}
+function ufPick() {
+  let inp = $('ufFile');
+  if (!inp) { inp = document.createElement('input'); inp.type = 'file'; inp.id = 'ufFile'; inp.accept = '.ttf,.otf,.woff,.woff2'; inp.style.display = 'none'; document.body.appendChild(inp); inp.onchange = () => { if (inp.files[0]) ufAdd(inp.files[0]); inp.value = ''; }; }
+  inp.click();
+}
+async function ufAdd(file) {
+  if (!/\.(ttf|otf|woff2?)$/i.test(file.name)) { toast('اختار ملف خط (.ttf أو .otf)'); return; }
+  if (file.size > 3 * 1024 * 1024) { toast('ملف الخط كبير أوي (أكتر من 3 ميجا) — اختار وزن واحد بس من الخط'); return; }
+  const data = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = () => r(null); fr.readAsDataURL(file); });
+  const f = { id: Date.now().toString(36), name: file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim().slice(0, 40), data };
+  if (!data || !(await ufRegister(f))) { toast('الملف ده مش خط ينفع يتفتح'); return; }
+  UF.push(f);
+  try { localStorage.setItem('ss_ufonts', JSON.stringify(UF)); } catch (e) { UF.pop(); toast('مفيش مكان يتحفظ فيه الخط ده — شيل خط تاني الأول'); return; }
+  SET.font = ufFam(f); ufMenus(); relook(); toast('الخط «' + f.name + '» اتضاف واتختار للترانيم');
+}
+$('ufAdd').onclick = ufPick; ufMenus();
+UF.forEach(f => ufRegister(f).then(() => { if (SET.font === ufFam(f) || SET.fontB === ufFam(f)) applySet(); }));
+if ((SET.font || '').startsWith('U ') && !UF.some(f => ufFam(f) === SET.font)) SET.font = 'K Baloo';
+if ((SET.fontB || '').startsWith('U ') && !UF.some(f => ufFam(f) === SET.fontB)) SET.fontB = 'K Naskh';
 // ---------- font / size ----------
 function applySet() {
-  if (APP) window.bp.style({ font: SET.font, fontB: SET.fontB, scale: SET.scale, fill: SET.fill !== false });
+  const used = UF.filter(f => ufFam(f) === SET.font || ufFam(f) === SET.fontB).map(f => ({ fam: ufFam(f), data: f.data }));
+  if (APP) window.bp.style({ font: SET.font, fontB: SET.fontB, scale: SET.scale, fill: SET.fill !== false, ufonts: used });
   $('storyBtn').classList.toggle('on', SET.story !== false);
   $('fillBtn').textContent = 'ملء الشاشة: ' + (SET.fill !== false ? 'شغال' : 'مقفول');
   for (const d of [document, st.out && !st.out.closed ? st.out.document : null]) if (d) { d.documentElement.style.setProperty('--f', `"${SET.font}"`); d.documentElement.style.setProperty('--fb', `"${SET.fontB}"`); d.documentElement.style.setProperty('--s', SET.scale); }
@@ -458,7 +498,7 @@ function openTopic(i) { setTab('topics'); $('results').innerHTML = ''; showTopic
 // the topics a hymn belongs to (shown under its title)
 function hymnTopics(num) { return (window.TOPICS || []).filter(t => t.nums.includes(num)).map(t => t.name); }
 function setTab(t) {
-  st.tab = t; document.querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('on', x.dataset.tab === t));
+  st.tab = t; st.kbAt = null; document.querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('on', x.dataset.tab === t));
   $('q').value = ''; $('q').placeholder = t === 'hymns' ? 'اسم الترنيمة أو أي كلام منها…' : 'اكتب الشاهد (يوحنا 3 16) أو أي كلام من الآية…';
   document.querySelector('.search').style.display = (t === 'today' || t === 'history' || t === 'topics' || t === 'plan') ? 'none' : '';
   search(); if (t === 'hymns' || t === 'bible') $('q').focus();
@@ -544,6 +584,26 @@ async function planFromFile(file) {
   $('results').innerHTML = ''; crumb([{ t: 'فرصي', fn: () => search() }, { t: 'اختار الفرصة' }]);
   sorted.forEach(f => item('', planName(f), planDate(f.date) + (f.place ? ' · ' + f.place : '') + ' · ' + f.items.length + (f.items.length === 1 ? ' حاجة' : ' حاجات'), () => planUse(f)));
 }
+// «+ للفرصة»: build a فرصة here on the computer (hymns / verses written on a paper) — saved on this computer only
+function addPlanBtn() {
+  const b = document.createElement('button'); b.className = 'btn addplan'; b.type = 'button';
+  b.innerHTML = '+ للفرصة'; b.title = st.cur && st.cur.kind === 'bible' ? 'ضيف الآية المتجهزة للفرصة (تلاقيها في «فرصي»)' : 'ضيف الترنيمة دي للفرصة (تلاقيها في «فرصي»)';
+  b.onclick = e => { e.stopPropagation(); planAdd(); };
+  const hl = $('curTitle').querySelector('.hl'); if (hl) hl.after(b); else $('curTitle').appendChild(b);
+}
+function planAdd() {
+  if (!st.cur) return;
+  if (!PLAN) PLAN = { title: 'فرصة ' + planDate(todayId()), date: todayId(), items: [], here: true };
+  let it;
+  if (st.cur.kind === 'hymn') it = { t: 'h', n: st.cur.num, title: H[st.cur.num - 1].title };
+  else { const v = Math.max(0, st.cue); it = { t: 'b', b: st.cur.b, c: st.cur.c, v, v2: v }; }
+  const same = PLAN.items.some(x => x.t === it.t && (it.t === 'h' ? (x.title === it.title || x.n === it.n) : (x.b === it.b && x.c === it.c && x.v === it.v)));
+  if (same) { toast('دي موجودة في الفرصة خلاص'); return; }
+  PLAN.items.push(it); savePlan(); if (st.tab === 'plan') search();
+  toast('اتضافت للفرصة (' + arD(PLAN.items.length) + ') — تلاقيها في «فرصي»');
+}
+function planMove(i, d) { const j = i + d, a = PLAN.items; if (j < 0 || j >= a.length) return; [a[i], a[j]] = [a[j], a[i]]; if (st.planSel === i) st.planSel = j; else if (st.planSel === j) st.planSel = i; savePlan(); search(); }
+function planDel(i) { PLAN.items.splice(i, 1); if (st.planSel === i) st.planSel = null; else if (st.planSel > i) st.planSel--; savePlan(); search(); }
 function planUse(f) { PLAN = f; st.planSel = null; savePlan(); setTab('plan'); search(); toast('الفرصة جاهزة: ' + planName(f)); }
 function planOpen(it, i) {
   st.planSel = i;
@@ -558,11 +618,16 @@ function showPlan() {
   box.innerHTML = `<div class="plan-h"><span class="hl">الفرصة اللي اتحضّرت</span> <b>${esc(planName(f))}</b><small>${esc(planDate(f.date))}${f.place ? ' · ' + esc(f.place) : ''}</small><button class="btn plan-x" title="شيل الفرصة دي">شيلها</button></div>`;
   $('results').appendChild(box);
   box.querySelector('.plan-x').onclick = () => { PLAN = null; st.planSel = null; savePlan(); search(); };
+  if (!f.items.length) empty('<b>📝</b>الفرصة فاضية — افتح أي ترنيمة أو آية ودوس «+ للفرصة» فوق.');
   f.items.forEach((it, i) => {
     let t, s;
     if (it.t === 'h') { const n = hymnOf({ title: it.title, num: it.n }); t = n ? H[n - 1].title : (it.title || 'ترنيمة'); s = 'ترنيمة'; }
     else { const v2 = it.v2 != null ? it.v2 : it.v; t = B[it.b] ? ref(it.b, it.c, it.v) + (v2 > it.v ? '–' + arD(v2 + 1) : '') : 'شاهد'; s = B[it.b] && B[it.b].chapters[it.c] ? String(B[it.b].chapters[it.c][it.v] || '').replace(/[\u064B-\u0652\u0670]/g, '').slice(0, 70) : ''; }
     const d = item(arD(i + 1), t, s, () => planOpen(it, i)); d.classList.add('plan-it'); if (st.planSel === i) d.classList.add('sel');
+    const ctl = document.createElement('span'); ctl.className = 'plan-ctl';
+    ctl.innerHTML = `<button data-m="-1" title="لفوق">▲</button><button data-m="1" title="لتحت">▼</button><button data-m="x" title="شيلها من الفرصة">×</button>`;
+    ctl.querySelectorAll('button').forEach(b => b.onclick = e => { e.stopPropagation(); if (b.dataset.m === 'x') planDel(i); else planMove(i, +b.dataset.m); });
+    d.appendChild(ctl);
     if (it.note) { const n = document.createElement('div'); n.className = 'plan-n'; n.textContent = it.note; d.querySelector('div:last-child').appendChild(n); }
   });
   if (f.note) { const n = document.createElement('div'); n.className = 'plan-note'; n.innerHTML = `<b>ملاحظاتك:</b> ${esc(f.note).replace(/\n/g, '<br>')}`; $('results').appendChild(n); }
@@ -574,7 +639,7 @@ document.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTrans
 function showPlanTab() {
   if (PLAN) { showPlan(); const o = document.createElement('button'); o.className = 'plan-open'; o.style.marginTop = '10px'; o.innerHTML = '<b>فرصة تانية؟</b> افتح ملف تاني من «فرصي» (أو اسحبه هنا)'; o.onclick = planPick; $('results').appendChild(o); return; }
   const o = document.createElement('button'); o.className = 'plan-open'; o.innerHTML = '<b>عندك فرصة محضّرها على الموبايل؟</b> افتح الملف اللي بعته لنفسك من «فرصي» (أو اسحبه هنا)'; o.onclick = planPick; $('results').appendChild(o);
-  empty('<b>📱</b>على الموبايل: افتح الفرصة في «فرصي» ودوس «هتعرضها على الكمبيوتر؟»، وابعتها لنفسك واتساب.<br>وعلى الكمبيوتر افتح الملف من هنا، تلاقي الترانيم والشواهد بالترتيب وملاحظاتك.');
+  empty('<b>📱</b>على الموبايل: افتح الفرصة في «فرصي» ودوس «هتعرضها على الكمبيوتر؟»، وابعتها لنفسك واتساب.<br>وعلى الكمبيوتر افتح الملف من هنا، تلاقي الترانيم والشواهد بالترتيب وملاحظاتك.<br><br><b>📝</b>أو حضّرها هنا على الكمبيوتر: افتح أي ترنيمة أو آية ودوس «+ للفرصة» فوق، وهتتجمّع هنا بالترتيب.');
 }
 function showToday() {
   const m = curMeeting(), head = document.createElement('div'); head.className = 'meethead';
@@ -621,6 +686,7 @@ function abbrevRef(q) {
 }
 function openRef(r) { if (st.tab !== 'bible') setTab('bible'); loadChapter(r.b, r.c, r.v); play(); toast(ref(r.b, r.c, r.v) + ' — اتعرضت · رقم + Enter = آية تانية'); }
 const isB = e => e.code === 'KeyB' || e.key === 'b' || e.key === 'B' || e.key === 'لا';
+const LIST_TABS = ['today', 'history', 'plan', 'topics'];
 function onKey(e) {
   const tag = (e.target && e.target.tagName) || '';
   if (tag === 'INPUT' || tag === 'SELECT') return;
@@ -629,6 +695,17 @@ function onKey(e) {
   if (isB(e)) { e.preventDefault(); blank(); return; }          // B (also "لا" on the Arabic keyboard)
   // typing anywhere goes straight into the search box
   if ((st.tab === 'hymns' || st.tab === 'bible') && e.key.length === 1 && e.code !== 'Space') { $('q').value = ''; $('q').focus(); return; }
+  // «النهارده» / «السجل» / «فرصي» / «المواضيع»: ↓ ↑ walk the list on the right, Enter opens the one you are on and shows it.
+  // ← → PageUp PageDown Space (and the clicker) always stay for the slides.
+  if (LIST_TABS.includes(st.tab) && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || (e.key === 'Enter' && $('results').querySelector('.item.kb')))) {
+    const its = [...$('results').querySelectorAll('.item')]; if (!its.length) return;
+    e.preventDefault();
+    if (e.key === 'Enter') { const on = $('results').querySelector('.item.kb'); const i = its.indexOf(on); on.classList.remove('kb'); st.kbAt = i; const before = key(); on.click(); if (st.cur && key() !== before) play(); return; }
+    let i = its.findIndex(x => x.classList.contains('kb')); if (i < 0) i = st.kbAt != null && st.kbAt < its.length ? st.kbAt : -1;
+    i = i < 0 ? (e.key === 'ArrowDown' ? 0 : its.length - 1) : Math.max(0, Math.min(its.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)));
+    its.forEach(x => x.classList.remove('kb')); its[i].classList.add('kb'); its[i].scrollIntoView({ block: 'nearest' }); st.kbAt = i;
+    return;
+  }
   // verses: ↓ ↑ flip like ← → (on the screen = the next verse shows right away), and the list follows
   if (st.cur && st.cur.kind === 'bible' && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
     e.preventDefault(); step(e.key === 'ArrowDown' ? 1 : -1);
